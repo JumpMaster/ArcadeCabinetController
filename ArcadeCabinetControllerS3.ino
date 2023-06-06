@@ -2,16 +2,21 @@
 
 void togglePowerSwitch()
 {
-    digitalWrite(relay_PIN1, HIGH); // Power Switch
+    digitalWrite(PC_POWER_SWITCH_PIN, HIGH); // Power Switch
     delay(100);
-    digitalWrite(relay_PIN1, LOW); // Power Switch
+    digitalWrite(PC_POWER_SWITCH_PIN, LOW);  // Power Switch
 }
 
 void toggleResetSwitch()
 {
-    digitalWrite(relay_PIN2, HIGH); // Power Switch
+    digitalWrite(PC_RESET_SWITCH_PIN, HIGH); // Reset Switch
     delay(100);
-    digitalWrite(relay_PIN2, LOW); // Power Switch
+    digitalWrite(PC_RESET_SWITCH_PIN, LOW);  // Reset Switch
+}
+
+void switchAmplifierState(bool state)
+{
+    digitalWrite(AMP_POWER_ENABLE_PIN, state); // Turn on/off amplifier
 }
 
 void connectToNetwork()
@@ -33,6 +38,7 @@ void setupMQTT()
     mqttVolumeMuteButton.addConfigVar("device", deviceConfig);
     mqttVolumeUpButton.addConfigVar("device", deviceConfig);
     mqttVolumeDownButton.addConfigVar("device", deviceConfig);
+    mqttAmplifierEnabledSwitch.addConfigVar("device", deviceConfig);
 
     mqttClient.setBufferSize(4096);
     mqttClient.setServer(mqtt_server, 1883);
@@ -43,10 +49,11 @@ void mqttConnect()
 {
     Log.println("Connecting to MQTT");
     // Attempt to connect
-    if (mqttClient.connect(deviceName, mqtt_username, mqtt_password))
+    if (mqttClient.connect(deviceName, mqtt_username, mqtt_password))//, 0, 0, 0, 0, 0))
     {
         Log.println("Connected to MQTT");
         nextMqttConnectAttempt = 0;
+
 
         mqttClient.publish(mqttPowerButton.getConfigTopic().c_str(), mqttPowerButton.getConfigPayload().c_str(), true);
         mqttClient.publish(mqttPowerState.getConfigTopic().c_str(), mqttPowerState.getConfigPayload().c_str(), true);
@@ -54,6 +61,7 @@ void mqttConnect()
         mqttClient.publish(mqttVolumeMuteButton.getConfigTopic().c_str(), mqttVolumeMuteButton.getConfigPayload().c_str(), true);
         mqttClient.publish(mqttVolumeUpButton.getConfigTopic().c_str(), mqttVolumeUpButton.getConfigPayload().c_str(), true);
         mqttClient.publish(mqttVolumeDownButton.getConfigTopic().c_str(), mqttVolumeDownButton.getConfigPayload().c_str(), true);
+        mqttClient.publish(mqttAmplifierEnabledSwitch.getConfigTopic().c_str(), mqttAmplifierEnabledSwitch.getConfigPayload().c_str(), true);
 
         mqttClient.publish(mqttPowerState.getStateTopic().c_str(), cabinetPowerState ? "ON" : "OFF", true);
         mqttClient.publish(mqttParentalMode.getStateTopic().c_str(), parentalMode ? "ON" : "OFF", true);
@@ -63,6 +71,7 @@ void mqttConnect()
         mqttClient.subscribe(mqttVolumeMuteButton.getCommandTopic().c_str());
         mqttClient.subscribe(mqttVolumeUpButton.getCommandTopic().c_str());
         mqttClient.subscribe(mqttVolumeDownButton.getCommandTopic().c_str());
+        mqttClient.subscribe(mqttAmplifierEnabledSwitch.getCommandTopic().c_str());
     }
     else
     {
@@ -76,6 +85,8 @@ void mqttCallback(char* topic, byte* payload, unsigned int length)
     char data[length + 1];
     memcpy(data, payload, length);
     data[length] = '\0';
+
+    Log.printf("%s : %s\n", topic, data);
 
     if (strcmp(topic, mqttPowerButton.getCommandTopic().c_str()) == 0)
     {
@@ -111,18 +122,43 @@ void mqttCallback(char* topic, byte* payload, unsigned int length)
     }
     else if (strcmp(topic, mqttVolumeMuteButton.getCommandTopic().c_str()) == 0)
     {
+        Log.println("Virtual mute");
         Keyboard.pressRaw(HID_KEY_MUTE);
         Keyboard.releaseRaw(HID_KEY_MUTE);
     }
     else if (strcmp(topic, mqttVolumeUpButton.getCommandTopic().c_str()) == 0)
     {
+        Log.println("Virtual volume +");
         Keyboard.pressRaw(HID_KEY_VOLUME_UP);
         Keyboard.releaseRaw(HID_KEY_VOLUME_UP);
     }
     else if (strcmp(topic, mqttVolumeDownButton.getCommandTopic().c_str()) == 0)
     {
+        Log.println("Virtual volume -");
         Keyboard.pressRaw(HID_KEY_VOLUME_DOWN);
         Keyboard.releaseRaw(HID_KEY_VOLUME_DOWN);
+    }
+    else if (strcmp(mqttAmplifierEnabledSwitch.getCommandTopic().c_str(), topic) == 0)
+    {
+        if (strcmp(data, "ON") == 0)
+        {
+            Log.println("Amp On");
+            amplifierEnabled = true;
+            if (cabinetPowerState)
+            {
+                switchAmplifierState(true);
+            }
+        }
+        else
+        {
+            Log.println("Amp Off");
+            amplifierEnabled = false;
+            if (cabinetPowerState)
+            {
+                switchAmplifierState(false);
+            }
+        }
+        mqttClient.publish(mqttAmplifierEnabledSwitch.getStateTopic().c_str(), data, true);
     }
 }
 
@@ -178,29 +214,92 @@ void setupPixels()
     pixels.begin();
     pixels.clear();
     pixels.show();
-    //pixels.setBrightness(lightBrightness);
+}
+
+void restLedControl(AsyncWebServerRequest *request)
+{
+    if (request->url().indexOf("setColor") >= 0)
+    {
+        if (request->hasParam("r") &&
+            request->hasParam("g") &&
+            request->hasParam("b"))
+        {
+            uint8_t r, g, b;
+            ledStrip_R = request->getParam("r")->value().toInt();
+            ledStrip_G = request->getParam("g")->value().toInt();
+            ledStrip_B = request->getParam("b")->value().toInt();
+            Log.printf("setColor %d:%d:%d\n",  ledStrip_R, ledStrip_G, ledStrip_B);
+            
+            lightMode = LIGHT_MODE_SOLID;
+            pixels.fill(pixels.Color(ledStrip_R, ledStrip_G, ledStrip_B), 0, NUMPIXELS);
+
+            request->send(200, "application/json", "{\"message\":\"RGB set\"}");
+            return;
+        }
+        else
+        {
+            request->send(200, "application/json", "{\"message\":\"Missing params\"}");
+            return;
+        }
+    }
+    else if (request->url().indexOf("setMode") >= 0)
+    {
+        if (request->hasParam("mode"))
+        {
+            if (request->getParam("mode")->value().indexOf("rainbow") >= 0)
+            {
+                lightMode = LIGHT_MODE_RAINBOW;
+                Log.println("Mode set to rainbow");
+            }
+            else if (request->getParam("mode")->value().indexOf("off") >= 0)
+            {
+                lightMode = LIGHT_MODE_OFF;
+                Log.println("Mode set to off");
+            }
+            request->send(200, "application/json", "{\"message\":\"Mode set\"}");
+            return;
+        }
+        else
+        {
+            request->send(200, "application/json", "{\"message\":\"Missing params\"}");
+            return;
+        }
+    }
+
+    request->send(200, "application/json", "{\"message\":\"Unknown request\"}");
+}
+
+void setupRestAPI()
+{
+    // Function to be exposed
+    restAPIserver.on("/led", restLedControl);
+    // start server
+    restAPIserver.begin();
 }
 
 void setup()
 {
+
     Serial.begin(115200);
 
     pinMode(ONBOARD_LED_PIN, OUTPUT);
+    digitalWrite(ONBOARD_LED_PIN, HIGH);
+
+    pinMode(NEOPIXEL_POWER, OUTPUT);
+    pinMode(NEOPIXEL_POWER, LOW);
+
     pinMode(PC_POWER_LED_SENSE_PIN, INPUT_PULLUP);
-    pinMode(PLAYER1_BUTTON_OUTPUT_PIN, OUTPUT);
 
-    pinMode(relay_PIN1, OUTPUT);
-    pinMode(relay_PIN2, OUTPUT);
-    pinMode(relay_PIN3, OUTPUT);
-    pinMode(relay_PIN4, OUTPUT);
+    pinMode(PC_POWER_SWITCH_PIN, OUTPUT);
+    pinMode(PC_RESET_SWITCH_PIN, OUTPUT);
+    pinMode(AMP_POWER_ENABLE_PIN, OUTPUT);
 
+    digitalWrite(PC_POWER_SWITCH_PIN, LOW);
+    digitalWrite(PC_RESET_SWITCH_PIN, LOW);
+    digitalWrite(AMP_POWER_ENABLE_PIN, LOW);
     digitalWrite(ONBOARD_LED_PIN, HIGH);
-    digitalWrite(PLAYER1_BUTTON_OUTPUT_PIN, LOW);
-    digitalWrite(relay_PIN1, LOW);
-    digitalWrite(relay_PIN2, LOW);
-    digitalWrite(relay_PIN3, LOW);
-    digitalWrite(relay_PIN4, LOW);
-    digitalWrite(ONBOARD_LED_PIN, HIGH);
+
+    player1Button.begin();
 
     setupPixels();
 
@@ -210,11 +309,14 @@ void setup()
 
     setupOTA();
 
+    setupRestAPI();
+
     mqttConnect();
 
     Keyboard.begin();
     USB.begin();
 
+/*
     //create a task that will be executed in the Task1code() function, with priority 1 and executed on core 0
     xTaskCreatePinnedToCore(
                     loop0,          // Task function.
@@ -224,6 +326,7 @@ void setup()
                     0,              // priority of the task
                     &loop0Handle,   // Task handle to keep track of created task
                     0);             // pin task to core 0
+*/
 }
 
 void manageWiFi()
@@ -255,14 +358,22 @@ void manageWiFi()
 
 void manageOnboardLED()
 {
+    /*
     if (startupComplete)
         return;
 
     // TURN OFF ONBOARD LED ONCE UPTIME IS GREATER THEN 5 SECONDS
-    if (millis() > 5000)
+    if (millis() > 30000)
     {
         digitalWrite(ONBOARD_LED_PIN, LOW);
         startupComplete = true;
+    }
+    else */ 
+    if (millis() > nextOnboardLedUpdate)
+    {
+        nextOnboardLedUpdate = millis() + 250;
+        onboardLedState = !onboardLedState;
+        digitalWrite(ONBOARD_LED_PIN, onboardLedState ? HIGH : LOW);
     }
 }
 
@@ -308,32 +419,33 @@ void monitorPowerState()
     // PC Power LED uses an OptoCoupler to ground the pin.  So ON is LOW and OFF is HIGH due to pull up.
     if (digitalRead(PC_POWER_LED_SENSE_PIN) == cabinetPowerState)
     {
-        cabinetPowerState = !digitalRead(PC_POWER_LED_SENSE_PIN);
+        cabinetPowerState = digitalRead(PC_POWER_LED_SENSE_PIN) ? false : true;
     }
 }
 
-void reportPowerState()
+void managePowerStateChanges()
 {
-
-    // MANAGE POWER STATES
-    if (reportedPowerState != cabinetPowerState)
+    // MANAGE POWER STATE
+    if (managedPowerState != cabinetPowerState)
     {
-        reportedPowerState = cabinetPowerState;
+        managedPowerState = cabinetPowerState;
+
+        if (cabinetPowerState) // ON
+        {
+            lightMode = LIGHT_MODE_RAINBOW;
+            if (amplifierEnabled)
+            {
+                switchAmplifierState(true);
+            }
+        }
+        else // OFF
+        {
+            lightMode = LIGHT_MODE_OFF;
+            switchAmplifierState(false);
+        }
 
         if (mqttClient.connected())
             mqttClient.publish(mqttPowerState.getStateTopic().c_str(), cabinetPowerState ? "ON" : "OFF", true);
-
-        digitalWrite(relay_PIN3, cabinetPowerState);
-
-        pixels.clear();
-        if (cabinetPowerState)
-        {
-            for(int i=0; i<NUMPIXELS; i++)
-            {
-                pixels.setPixelColor(i, pixels.Color(255, 255, 255));
-            }
-        }
-        pixels.show();
     
         Log.printf("Cabinet powering %s\n", cabinetPowerState ? "on" : "off");
     }
@@ -347,39 +459,70 @@ void manageStartButton()
 
     if (cabinetPowerState == HIGH)
     {
-        if (player1Button.isPressed() != player1ButtonState)
+        if (player1Button.pressedFor(15000) && !resetButtonPressed)
         {
-            player1ButtonState = player1Button.isPressed();
-            digitalWrite(PLAYER1_BUTTON_OUTPUT_PIN, player1ButtonState ? HIGH : LOW);
-        }
-
-        if (player1Button.pressedFor(15000))
             toggleResetSwitch();
+            Log.println("Arcade cabinet reset");
+            resetButtonPressed = true;
+        }
     }
     else if (cabinetPowerState == LOW && !parentalMode)
     {
-        if (player1Button.pressedFor(500)) // && !player1Button.pressedFor(15000))
+        if (player1Button.pressedFor(300) && !powerButtonPressed) // && !player1Button.pressedFor(15000))
+        {
+            Log.println("Power button pressed");
+            powerButtonPressed = true;
             togglePowerSwitch();
+        }
     }
-}
 
-void powerOnCabinet()
-{
-    if (!cabinetPowerState)
-        togglePowerSwitch();
-}
-
-void loop0(void * pvParameters)
-{
-    player1Button.begin();
-
-    for(;;)
+    if (player1Button.isPressed() != player1ButtonState)
     {
-        monitorPowerState();
+        player1ButtonState = player1Button.isPressed();
+        Log.println(player1ButtonState ? "PRESSED" : "RELEASED");
 
-        manageStartButton();
+        if (!player1ButtonState)
+        {
+            powerButtonPressed = false;
+            resetButtonPressed = false;
+        }
     }
 }
+
+ void manageLedStrip()
+ {
+    static uint16_t lightIndex = 0;
+
+    if (ledBrightness == 0 && lightMode == LIGHT_MODE_OFF)
+        return;
+
+    if (lightMode == LIGHT_MODE_OFF && ledBrightness > 0)
+        ledBrightness--;
+    else if (lightMode != LIGHT_MODE_OFF && ledBrightness < 255)
+        ledBrightness++;
+
+
+    if (pixels.getBrightness() != ledBrightness)
+    {
+        pixels.setBrightness(ledBrightness);
+
+        if (lightMode == LIGHT_MODE_SOLID)
+            pixels.fill(pixels.Color(ledStrip_R, ledStrip_G, ledStrip_B), 0, NUMPIXELS);
+    }
+
+
+    //if (millis() < nextLedStripUpdate)
+    //    return;
+
+    if (lightMode == LIGHT_MODE_RAINBOW)
+    {
+        lightIndex += 50;
+        pixels.rainbow(lightIndex, 1);
+    }
+
+    pixels.show();
+    //nextLedStripUpdate = millis() + stripUpdateInterval;
+ }
 
 void loop() {
 
@@ -391,18 +534,11 @@ void loop() {
 
     manageOnboardLED();
 
-    reportPowerState();
+    manageStartButton();
 
-/*
-    if (digitalRead(0) == LOW && !t)
-    {
-        t = true;
-        Keyboard.pressRaw(KEY_MEDIA_VOLUME_MUTE);
-        Keyboard.releaseRaw(KEY_MEDIA_VOLUME_MUTE);
-    }
-    else if (digitalRead(0) == HIGH && t)
-    {
-        t = false;
-    }
-*/
+    monitorPowerState();
+
+    managePowerStateChanges();
+
+    manageLedStrip();
 };
