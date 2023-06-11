@@ -18,6 +18,7 @@ const uint8_t ONBOARD_LED_PIN = 13;
 const uint8_t PC_POWER_LED_SENSE_PIN = 12;
 const uint8_t PLAYER1_BUTTON_INPUT_PIN = 10;
 const uint8_t LED_STRIP_PIN = 8;
+const uint8_t PCB_NEOPIXEL_PIN = 33; // Will be 14 on the PCB
 
 const uint8_t PC_POWER_SWITCH_PIN = 5;
 const uint8_t PC_RESET_SWITCH_PIN = 9;
@@ -31,7 +32,16 @@ typedef enum
 } LightMode;
 
 const uint8_t NUMPIXELS = 34;
-Adafruit_NeoPixel pixels(NUMPIXELS, LED_STRIP_PIN, NEO_RGB + NEO_KHZ800);
+Adafruit_NeoPixel marqueePixels(NUMPIXELS, LED_STRIP_PIN, NEO_RGB + NEO_KHZ800);
+Adafruit_NeoPixel diagnosticPixel(1, PCB_NEOPIXEL_PIN, NEO_GRB + NEO_KHZ800);
+
+uint8_t diagnosticPixelMaxBrightness = 100;
+uint8_t diagnosticPixelBrightness = diagnosticPixelMaxBrightness;
+bool diagnosticPixelBrightnessDirection = 0;
+uint32_t diagnosticPixelColor = 0xFF0000;
+uint32_t currentDiagnosticPixelColor = 0xFF0000;;
+uint32_t nextDiagnosticPixelUpdate = 0;
+
 LightMode lightMode = LIGHT_MODE_OFF;
 uint32_t nextLedStripUpdate = 0;
 const uint16_t stripUpdateInterval = 1000 / 30; // 30 FPS

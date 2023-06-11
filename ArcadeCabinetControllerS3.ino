@@ -211,9 +211,18 @@ void setupOTA()
 
 void setupPixels()
 {
-    pixels.begin();
-    pixels.clear();
-    pixels.show();
+    // Temporary code using the Afafruit ESP32-S3 onboard neopixel
+    pinMode(NEOPIXEL_POWER, OUTPUT);
+    digitalWrite(NEOPIXEL_POWER, HIGH);
+
+    diagnosticPixel.begin();
+    diagnosticPixel.setPixelColor(0, 0xFF0000);
+    diagnosticPixel.setBrightness(diagnosticPixelMaxBrightness);
+    diagnosticPixel.show();
+
+    marqueePixels.begin();
+    marqueePixels.clear();
+    marqueePixels.show();
 }
 
 void restLedControl(AsyncWebServerRequest *request)
@@ -231,7 +240,7 @@ void restLedControl(AsyncWebServerRequest *request)
             Log.printf("setColor %d:%d:%d\n",  ledStrip_R, ledStrip_G, ledStrip_B);
             
             lightMode = LIGHT_MODE_SOLID;
-            pixels.fill(pixels.Color(ledStrip_R, ledStrip_G, ledStrip_B), 0, NUMPIXELS);
+            marqueePixels.fill(marqueePixels.Color(ledStrip_R, ledStrip_G, ledStrip_B), 0, NUMPIXELS);
 
             request->send(200, "application/json", "{\"message\":\"RGB set\"}");
             return;
@@ -284,9 +293,6 @@ void setup()
 
     pinMode(ONBOARD_LED_PIN, OUTPUT);
     digitalWrite(ONBOARD_LED_PIN, HIGH);
-
-    pinMode(NEOPIXEL_POWER, OUTPUT);
-    pinMode(NEOPIXEL_POWER, LOW);
 
     pinMode(PC_POWER_LED_SENSE_PIN, INPUT_PULLUP);
 
@@ -390,7 +396,8 @@ void manageMQTT()
         }
     } else if (millis() > nextMqttConnectAttempt)
     {
-        mqttConnect();
+        if (WiFi.status() == WL_CONNECTED)
+            mqttConnect();
     }
 }
 
@@ -489,8 +496,8 @@ void manageStartButton()
     }
 }
 
- void manageLedStrip()
- {
+void manageMarqueePixels()
+{
     static uint16_t lightIndex = 0;
 
     if (ledBrightness == 0 && lightMode == LIGHT_MODE_OFF)
@@ -502,12 +509,12 @@ void manageStartButton()
         ledBrightness++;
 
 
-    if (pixels.getBrightness() != ledBrightness)
+    if (marqueePixels.getBrightness() != ledBrightness)
     {
-        pixels.setBrightness(ledBrightness);
+        marqueePixels.setBrightness(ledBrightness);
 
         if (lightMode == LIGHT_MODE_SOLID)
-            pixels.fill(pixels.Color(ledStrip_R, ledStrip_G, ledStrip_B), 0, NUMPIXELS);
+            marqueePixels.fill(marqueePixels.Color(ledStrip_R, ledStrip_G, ledStrip_B), 0, NUMPIXELS);
     }
 
 
@@ -517,12 +524,51 @@ void manageStartButton()
     if (lightMode == LIGHT_MODE_RAINBOW)
     {
         lightIndex += 50;
-        pixels.rainbow(lightIndex, 1);
+        marqueePixels.rainbow(lightIndex, 1);
     }
 
-    pixels.show();
+    marqueePixels.show();
     //nextLedStripUpdate = millis() + stripUpdateInterval;
- }
+}
+
+void manageDiagnosticPixel()
+{
+    if (millis() < nextDiagnosticPixelUpdate)
+        return;
+
+    if (mqttClient.connected())
+        diagnosticPixelColor = 0x00FF00;
+    else if (WiFi.status() == WL_CONNECTED)
+        diagnosticPixelColor = 0x0000FF;
+    else    
+        diagnosticPixelColor = 0xFF0000;
+    
+    if (diagnosticPixelBrightness <= 0)
+    {
+        diagnosticPixelBrightnessDirection = 1;
+        currentDiagnosticPixelColor = diagnosticPixelColor;
+        //if (boilerActive)
+        //{
+        //    if (!lightFlashColor)
+        //    {
+        //        currentColor = boilerActiveColor;
+        //    }
+        //    lightFlashColor = !lightFlashColor;
+        //}
+    }
+    else if (diagnosticPixelBrightness >= diagnosticPixelMaxBrightness)
+    {
+        diagnosticPixelBrightnessDirection = 0;
+    }
+    
+    diagnosticPixelBrightness = diagnosticPixelBrightnessDirection ? diagnosticPixelBrightness+1 : diagnosticPixelBrightness-1;
+    //diagnosticPixel.fill(currentDiagnosticPixelColor);
+    diagnosticPixel.setPixelColor(0, currentDiagnosticPixelColor);
+    diagnosticPixel.setBrightness(diagnosticPixelBrightness);
+    diagnosticPixel.show();
+
+    nextDiagnosticPixelUpdate = millis() + 33; // 33 = 30 FPS
+}
 
 void loop() {
 
@@ -540,5 +586,7 @@ void loop() {
 
     managePowerStateChanges();
 
-    manageLedStrip();
+    manageMarqueePixels();
+
+    manageDiagnosticPixel();
 };
