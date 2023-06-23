@@ -26,16 +26,13 @@ public:
     void setup()
     {
         Serial.begin(115200);
+        
         #ifdef ESP32
         uint8_t chipid[6];
         esp_read_mac(chipid, ESP_MAC_WIFI_STA);
         sprintf(_macAddress, "%02x:%02x:%02x:%02x:%02x:%02x",chipid[0], chipid[1], chipid[2], chipid[3], chipid[4], chipid[5]);
         #else
         #endif
-        syslog1.begin(1021);
-        syslog2.begin(1022);
-        syslog3.begin(1023);
-        syslog4.begin(1024);
     }
     void disableSerial(bool onoff) { _disableSerial = onoff; };
     void disableSyslog(bool onoff) { _disableSyslog = onoff; };
@@ -61,12 +58,7 @@ private:
     char _macAddress[80] = "RUN-SETUP";
     const char * _appName = APP_NAME;
     char logbuff[512]; // 1024 seems to be to large for some syslogd's.
-    WiFiUDP syslog1;
-    WiFiUDP syslog2;
-    WiFiUDP syslog3;
-    WiFiUDP syslog4;
-    WiFiUDP *syslogs[4] = {&syslog1, &syslog2, &syslog3, &syslog4};
-    uint8_t syslogSelector = 0;
+    WiFiUDP syslog;
 
     size_t syslogwrite(uint8_t c, uint8_t s = 14)
     {
@@ -85,11 +77,9 @@ private:
             logbuff[at++] = 0;
             at = 0;
 
-            //WiFiUDP syslog;
-            WiFiUDP *syslog = syslogs[syslogSelector++ % 4];
-            syslog->beginPacket(_syslogDest, _syslogPort);
-            syslog->printf("<%d>1 - %s %s - - - %s", s, _macAddress, _appName, logbuff);
-            syslog->endPacket();
+            syslog.beginPacket(_syslogDest, _syslogPort);
+            syslog.printf("<%d>1 - %s %s - - - %s", s, _macAddress, _appName, logbuff);
+            syslog.endPacket();
         };
         return 1;
     };

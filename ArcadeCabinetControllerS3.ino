@@ -1,3 +1,6 @@
+#define DIAGNOSTIC_PIXEL_PIN  14
+
+#include "StandardFeatures.h"
 #include "ArcadeCabinetControllerS3.h"
 
 void togglePowerSwitch()
@@ -14,70 +17,20 @@ void toggleResetSwitch()
     digitalWrite(PC_RESET_SWITCH_PIN, LOW);  // Reset Switch
 }
 
+void setMarqueeColor(uint8_t R, uint8_t G, uint8_t B)
+{
+    lightMode = LIGHT_MODE_SOLID;
+    marqueePixels.fill(Adafruit_NeoPixel::Color(R, G, B), 0, NUMPIXELS);
+}
+
+void restartDevice(AsyncWebServerRequest *request)
+{
+    ESP.restart();
+}
+
 void switchAmplifierState(bool state)
 {
     digitalWrite(AMP_POWER_ENABLE_PIN, state); // Turn on/off amplifier
-}
-
-void connectToNetwork()
-{
-    WiFi.mode(WIFI_STA);
-    WiFi.begin(wifiSSID, wifiPassword);
-
-    Log.setup();
-
-    if (WiFi.waitForConnectResult() == WL_CONNECTED && wifiReconnectCount == 0)
-        Log.println("Connected to WiFi");
-}
-
-void setupMQTT()
-{
-    mqttPowerButton.addConfigVar("device", deviceConfig);
-    mqttPowerState.addConfigVar("device", deviceConfig);
-    mqttParentalMode.addConfigVar("device", deviceConfig);
-    mqttVolumeMuteButton.addConfigVar("device", deviceConfig);
-    mqttVolumeUpButton.addConfigVar("device", deviceConfig);
-    mqttVolumeDownButton.addConfigVar("device", deviceConfig);
-    mqttAmplifierEnabledSwitch.addConfigVar("device", deviceConfig);
-
-    mqttClient.setBufferSize(4096);
-    mqttClient.setServer(mqtt_server, 1883);
-    mqttClient.setCallback(mqttCallback);
-}
-
-void mqttConnect()
-{
-    Log.println("Connecting to MQTT");
-    // Attempt to connect
-    if (mqttClient.connect(deviceName, mqtt_username, mqtt_password))//, 0, 0, 0, 0, 0))
-    {
-        Log.println("Connected to MQTT");
-        nextMqttConnectAttempt = 0;
-
-
-        mqttClient.publish(mqttPowerButton.getConfigTopic().c_str(), mqttPowerButton.getConfigPayload().c_str(), true);
-        mqttClient.publish(mqttPowerState.getConfigTopic().c_str(), mqttPowerState.getConfigPayload().c_str(), true);
-        mqttClient.publish(mqttParentalMode.getConfigTopic().c_str(), mqttParentalMode.getConfigPayload().c_str(), true);
-        mqttClient.publish(mqttVolumeMuteButton.getConfigTopic().c_str(), mqttVolumeMuteButton.getConfigPayload().c_str(), true);
-        mqttClient.publish(mqttVolumeUpButton.getConfigTopic().c_str(), mqttVolumeUpButton.getConfigPayload().c_str(), true);
-        mqttClient.publish(mqttVolumeDownButton.getConfigTopic().c_str(), mqttVolumeDownButton.getConfigPayload().c_str(), true);
-        mqttClient.publish(mqttAmplifierEnabledSwitch.getConfigTopic().c_str(), mqttAmplifierEnabledSwitch.getConfigPayload().c_str(), true);
-
-        mqttClient.publish(mqttPowerState.getStateTopic().c_str(), cabinetPowerState ? "ON" : "OFF", true);
-        mqttClient.publish(mqttParentalMode.getStateTopic().c_str(), parentalMode ? "ON" : "OFF", true);
-
-        mqttClient.subscribe(mqttPowerButton.getCommandTopic().c_str());
-        mqttClient.subscribe(mqttParentalMode.getCommandTopic().c_str());
-        mqttClient.subscribe(mqttVolumeMuteButton.getCommandTopic().c_str());
-        mqttClient.subscribe(mqttVolumeUpButton.getCommandTopic().c_str());
-        mqttClient.subscribe(mqttVolumeDownButton.getCommandTopic().c_str());
-        mqttClient.subscribe(mqttAmplifierEnabledSwitch.getCommandTopic().c_str());
-    }
-    else
-    {
-        Log.println("Failed to connect to MQTT");
-        nextMqttConnectAttempt = millis() + mqttReconnectInterval;
-    }
 }
 
 void mqttCallback(char* topic, byte* payload, unsigned int length)
@@ -115,7 +68,7 @@ void mqttCallback(char* topic, byte* payload, unsigned int length)
         }
         else
         {
-           parentalMode = false;
+            parentalMode = false;
         }
         mqttClient.publish(mqttParentalMode.getStateTopic().c_str(), data, true);
         Log.printf("Parental mode turned %s\n", parentalMode ? "on" : "off");
@@ -144,85 +97,25 @@ void mqttCallback(char* topic, byte* payload, unsigned int length)
         {
             Log.println("Amp On");
             amplifierEnabled = true;
-            if (cabinetPowerState)
-            {
-                switchAmplifierState(true);
-            }
         }
         else
         {
             Log.println("Amp Off");
             amplifierEnabled = false;
-            if (cabinetPowerState)
-            {
-                switchAmplifierState(false);
-            }
+        }
+        if (cabinetPowerState)
+        {
+            switchAmplifierState(amplifierEnabled);
         }
         mqttClient.publish(mqttAmplifierEnabledSwitch.getStateTopic().c_str(), data, true);
     }
 }
 
-void setupOTA()
+void setupMarquee()
 {
-    ArduinoOTA.setHostname(deviceName);
-  
-    ArduinoOTA.onStart([]()
-    {
-        Log.println("OTA Start");
-    });
-
-    ArduinoOTA.onEnd([]()
-    {
-        Log.println("OTA End");
-    });
-
-    ArduinoOTA.onProgress([](unsigned int progress, unsigned int total)
-    {
-        //Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
-    });
-
-    ArduinoOTA.onError([](ota_error_t error)
-    {
-        Serial.printf("Error[%u]: ", error);
-        if (error == OTA_AUTH_ERROR)
-        {
-            Log.println("Auth Failed");
-        }
-        else if (error == OTA_BEGIN_ERROR)
-        {
-            Log.println("Begin Failed");
-        }
-        else if (error == OTA_CONNECT_ERROR)
-        {
-            Log.println("Connect Failed");
-        }
-        else if (error == OTA_RECEIVE_ERROR)
-        {
-            Log.println("Receive Failed");
-        }
-        else if (error == OTA_END_ERROR)
-        {
-            Log.println("End Failed");
-        }
-    });
-    
-    ArduinoOTA.begin();
-}
-
-void setupPixels()
-{
-    // Temporary code using the Afafruit ESP32-S3 onboard neopixel
-    pinMode(NEOPIXEL_POWER, OUTPUT);
-    digitalWrite(NEOPIXEL_POWER, HIGH);
-
-    diagnosticPixel.begin();
-    diagnosticPixel.setPixelColor(0, 0xFF0000);
-    diagnosticPixel.setBrightness(diagnosticPixelMaxBrightness);
-    diagnosticPixel.show();
-
     marqueePixels.begin();
     marqueePixels.clear();
-    marqueePixels.show();
+    marqueePixels.show(); 
 }
 
 void restLedControl(AsyncWebServerRequest *request)
@@ -239,8 +132,7 @@ void restLedControl(AsyncWebServerRequest *request)
             ledStrip_B = request->getParam("b")->value().toInt();
             Log.printf("setColor %d:%d:%d\n",  ledStrip_R, ledStrip_G, ledStrip_B);
             
-            lightMode = LIGHT_MODE_SOLID;
-            marqueePixels.fill(marqueePixels.Color(ledStrip_R, ledStrip_G, ledStrip_B), 0, NUMPIXELS);
+            setMarqueeColor(ledStrip_R, ledStrip_G, ledStrip_B);
 
             request->send(200, "application/json", "{\"message\":\"RGB set\"}");
             return;
@@ -282,17 +174,16 @@ void setupRestAPI()
 {
     // Function to be exposed
     restAPIserver.on("/led", restLedControl);
+    restAPIserver.on("/restart", restartDevice);
     // start server
     restAPIserver.begin();
 }
 
 void setup()
 {
+    StandardSetup();
 
-    Serial.begin(115200);
-
-    pinMode(ONBOARD_LED_PIN, OUTPUT);
-    digitalWrite(ONBOARD_LED_PIN, HIGH);
+    mqttClient.setCallback(mqttCallback);
 
     pinMode(PC_POWER_LED_SENSE_PIN, INPUT_PULLUP);
 
@@ -303,26 +194,12 @@ void setup()
     digitalWrite(PC_POWER_SWITCH_PIN, LOW);
     digitalWrite(PC_RESET_SWITCH_PIN, LOW);
     digitalWrite(AMP_POWER_ENABLE_PIN, LOW);
-    digitalWrite(ONBOARD_LED_PIN, HIGH);
-
-    player1Button.begin();
-
-    setupPixels();
-
-    setupMQTT();
-
-    connectToNetwork();
-
-    setupOTA();
 
     setupRestAPI();
-
-    mqttConnect();
-
+    
     Keyboard.begin();
     USB.begin();
 
-/*
     //create a task that will be executed in the Task1code() function, with priority 1 and executed on core 0
     xTaskCreatePinnedToCore(
                     loop0,          // Task function.
@@ -332,93 +209,6 @@ void setup()
                     0,              // priority of the task
                     &loop0Handle,   // Task handle to keep track of created task
                     0);             // pin task to core 0
-*/
-}
-
-void manageWiFi()
-{
-    // if WiFi is down, try reconnecting
-    if ((WiFi.status() != WL_CONNECTED) && (millis() - wifiReconnectPreviousMillis >= wifiReconnectInterval))
-    {
-        if (wifiReconnectCount >= 10)
-        {
-            ESP.restart();
-        }
-        
-        wifiReconnectCount++;
-
-        connectToNetwork();
-
-        if (WiFi.status() == WL_CONNECTED)
-        {
-            wifiReconnectCount = 0;
-            wifiReconnectPreviousMillis = 0;
-            Log.println("Reconnected to WiFi");
-        }
-        else
-        {
-          wifiReconnectPreviousMillis = millis();
-        }
-    }
-}
-
-void manageOnboardLED()
-{
-    /*
-    if (startupComplete)
-        return;
-
-    // TURN OFF ONBOARD LED ONCE UPTIME IS GREATER THEN 5 SECONDS
-    if (millis() > 30000)
-    {
-        digitalWrite(ONBOARD_LED_PIN, LOW);
-        startupComplete = true;
-    }
-    else */ 
-    if (millis() > nextOnboardLedUpdate)
-    {
-        nextOnboardLedUpdate = millis() + 250;
-        onboardLedState = !onboardLedState;
-        digitalWrite(ONBOARD_LED_PIN, onboardLedState ? HIGH : LOW);
-    }
-}
-
-void manageMQTT()
-{
-    if (mqttClient.connected())
-    {
-        mqttClient.loop();
-
-        if (millis() > nextMetricsUpdate)
-        {
-            sendTelegrafMetrics();
-            nextMetricsUpdate = millis() + 30000;
-        }
-    } else if (millis() > nextMqttConnectAttempt)
-    {
-        if (WiFi.status() == WL_CONNECTED)
-            mqttConnect();
-    }
-}
-
-void sendTelegrafMetrics()
-{
-    if (millis() > nextMetricsUpdate)
-    {
-        nextMetricsUpdate = millis() + 30000;
-        uint32_t uptime = esp_timer_get_time() / 1000000;
-
-        char buffer[150];
-        snprintf(buffer, sizeof(buffer),
-            "status,device=%s uptime=%d,resetReason=%d,firmware=\"%s\",memUsed=%ld,memTotal=%ld",
-            deviceName,
-            uptime,
-            esp_reset_reason(),
-            esp_get_idf_version(),
-            (ESP.getHeapSize()-ESP.getFreeHeap()),
-            ESP.getHeapSize());
-        mqttClient.publish("telegraf/particle", buffer);
-    }
 }
 
 void monitorPowerState()
@@ -440,6 +230,7 @@ void managePowerStateChanges()
         if (cabinetPowerState) // ON
         {
             lightMode = LIGHT_MODE_RAINBOW;
+            diagnosticPixelColor2 = NEOPIXEL_MAGENTA;
             if (amplifierEnabled)
             {
                 switchAmplifierState(true);
@@ -448,11 +239,9 @@ void managePowerStateChanges()
         else // OFF
         {
             lightMode = LIGHT_MODE_OFF;
+            diagnosticPixelColor2 = NEOPIXEL_BLACK;
             switchAmplifierState(false);
         }
-
-        if (mqttClient.connected())
-            mqttClient.publish(mqttPowerState.getStateTopic().c_str(), cabinetPowerState ? "ON" : "OFF", true);
     
         Log.printf("Cabinet powering %s\n", cabinetPowerState ? "on" : "off");
     }
@@ -469,24 +258,24 @@ void manageStartButton()
         if (player1Button.pressedFor(15000) && !resetButtonPressed)
         {
             toggleResetSwitch();
-            Log.println("Arcade cabinet reset");
+            Log.println("Reset button pressed");
             resetButtonPressed = true;
         }
     }
     else if (cabinetPowerState == LOW && !parentalMode)
     {
-        if (player1Button.pressedFor(300) && !powerButtonPressed) // && !player1Button.pressedFor(15000))
+        if (player1Button.pressedFor(300) && !powerButtonPressed)
         {
+            togglePowerSwitch();
             Log.println("Power button pressed");
             powerButtonPressed = true;
-            togglePowerSwitch();
         }
     }
 
     if (player1Button.isPressed() != player1ButtonState)
     {
         player1ButtonState = player1Button.isPressed();
-        Log.println(player1ButtonState ? "PRESSED" : "RELEASED");
+        //Log.println(player1ButtonState ? "PRESSED" : "RELEASED");
 
         if (!player1ButtonState)
         {
@@ -531,62 +320,124 @@ void manageMarqueePixels()
     //nextLedStripUpdate = millis() + stripUpdateInterval;
 }
 
-void manageDiagnosticPixel()
+void manageLocalMQTT()
 {
-    if (millis() < nextDiagnosticPixelUpdate)
-        return;
-
-    if (mqttClient.connected())
-        diagnosticPixelColor = 0x00FF00;
-    else if (WiFi.status() == WL_CONNECTED)
-        diagnosticPixelColor = 0x0000FF;
-    else    
-        diagnosticPixelColor = 0xFF0000;
-    
-    if (diagnosticPixelBrightness <= 0)
+    if (mqttClient.connected() && mqttReconnected)
     {
-        diagnosticPixelBrightnessDirection = 1;
-        currentDiagnosticPixelColor = diagnosticPixelColor;
-        //if (boilerActive)
-        //{
-        //    if (!lightFlashColor)
-        //    {
-        //        currentColor = boilerActiveColor;
-        //    }
-        //    lightFlashColor = !lightFlashColor;
-        //}
-    }
-    else if (diagnosticPixelBrightness >= diagnosticPixelMaxBrightness)
-    {
-        diagnosticPixelBrightnessDirection = 0;
-    }
-    
-    diagnosticPixelBrightness = diagnosticPixelBrightnessDirection ? diagnosticPixelBrightness+1 : diagnosticPixelBrightness-1;
-    //diagnosticPixel.fill(currentDiagnosticPixelColor);
-    diagnosticPixel.setPixelColor(0, currentDiagnosticPixelColor);
-    diagnosticPixel.setBrightness(diagnosticPixelBrightness);
-    diagnosticPixel.show();
+        mqttReconnected = false;
 
-    nextDiagnosticPixelUpdate = millis() + 33; // 33 = 30 FPS
+        mqttClient.publish(mqttPowerButton.getConfigTopic().c_str(), mqttPowerButton.getConfigPayload().c_str(), true);
+        mqttClient.publish(mqttPowerState.getConfigTopic().c_str(), mqttPowerState.getConfigPayload().c_str(), true);
+        mqttClient.publish(mqttParentalMode.getConfigTopic().c_str(), mqttParentalMode.getConfigPayload().c_str(), true);
+        mqttClient.publish(mqttVolumeMuteButton.getConfigTopic().c_str(), mqttVolumeMuteButton.getConfigPayload().c_str(), true);
+        mqttClient.publish(mqttVolumeUpButton.getConfigTopic().c_str(), mqttVolumeUpButton.getConfigPayload().c_str(), true);
+        mqttClient.publish(mqttVolumeDownButton.getConfigTopic().c_str(), mqttVolumeDownButton.getConfigPayload().c_str(), true);
+        mqttClient.publish(mqttAmplifierEnabledSwitch.getConfigTopic().c_str(), mqttAmplifierEnabledSwitch.getConfigPayload().c_str(), true);
+
+        mqttClient.publish(mqttPowerState.getStateTopic().c_str(), cabinetPowerState ? "ON" : "OFF", true);
+        mqttClient.publish(mqttParentalMode.getStateTopic().c_str(), parentalMode ? "ON" : "OFF", true);
+
+        mqttClient.subscribe(mqttPowerButton.getCommandTopic().c_str());
+        mqttClient.subscribe(mqttParentalMode.getCommandTopic().c_str());
+        mqttClient.subscribe(mqttVolumeMuteButton.getCommandTopic().c_str());
+        mqttClient.subscribe(mqttVolumeUpButton.getCommandTopic().c_str());
+        mqttClient.subscribe(mqttVolumeDownButton.getCommandTopic().c_str());
+        mqttClient.subscribe(mqttAmplifierEnabledSwitch.getCommandTopic().c_str());
+    }
+
+    if (reportedPowerState != cabinetPowerState)
+    {
+        reportedPowerState = cabinetPowerState;
+
+        if (mqttClient.connected())
+            mqttClient.publish(mqttPowerState.getStateTopic().c_str(), cabinetPowerState ? "ON" : "OFF", true);
+    }
 }
 
-void loop() {
+void manageSerialReceive()
+{
+    const uint8_t MAX_MESSAGE_LENGTH = 255;
+    static char message[MAX_MESSAGE_LENGTH];
+    static unsigned int message_pos = 0;
+    uint32_t message_timeout = 0;
 
-    ArduinoOTA.handle();
+    while (Serial.available())
+    {
+        if (message_timeout == 0)
+        {
+            message_timeout = millis() + 500;
+        }
 
-    manageWiFi();
+        char buffer = Serial.read();
 
-    manageMQTT();
+        if (millis() > message_timeout || (message_pos > 0 && (buffer == 13 || buffer == 10)))
+        {
+            message[message_pos] = '\0';
 
-    manageOnboardLED();
+            if (message[0] == 'M') // Mode
+            {
+                if (message_pos == 2)
+                {
+                    char HM[2] = {message[1], '\0'};
+                    uint8_t requestedMode = strtol(HM, NULL, 16);
 
-    manageStartButton();
+                    if (requestedMode >= 0 and requestedMode <= 2)
+                    {
+                        lightMode = (LightMode) requestedMode;
+                        Log.printf("Light mode set:%d\n", requestedMode);
+                    }
+                }
+            }
+            else if (message[0] == 'C') // Color
+            {
+                if (message_pos == 7)
+                {
+                    char HR[3] = {message[1], message[2], '\0'};
+                    char HG[3] = {message[3], message[4], '\0'};
+                    char HB[3] = {message[5], message[6], '\0'};
+                    uint8_t R = strtol(HR, NULL, 16);
+                    uint8_t G = strtol(HG, NULL, 16);
+                    uint8_t B = strtol(HB, NULL, 16);
+                    Log.printf("%s:%s:%s - %d:%d:%d\n", HR, HG, HB, R, G, B);
+                    setMarqueeColor(R, G, B);
+                }
+            }
 
-    monitorPowerState();
+            message_pos = 0;
+            message_timeout = 0;
+        }
+        else if (buffer != 13 && buffer != 10)
+        {
+            message[message_pos++] = buffer;
+        }
+    }
+}
 
-    managePowerStateChanges();
+void loop()
+{
+    StandardLoop();
 
-    manageMarqueePixels();
-
-    manageDiagnosticPixel();
+    manageLocalMQTT();
 };
+
+void loop0(void * pvParameters)
+{
+    // Setup
+    setupMarquee();
+
+    player1Button.begin();
+
+    // Loop
+    for(;;)
+    {
+        manageStartButton();
+
+        monitorPowerState();
+
+        managePowerStateChanges();
+
+        manageMarqueePixels();
+
+        manageSerialReceive();
+    }
+}
