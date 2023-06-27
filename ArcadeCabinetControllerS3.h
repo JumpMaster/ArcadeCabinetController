@@ -7,7 +7,9 @@
 #include "HAMqttDevice.h"
 #include <Adafruit_NeoPixel.h>
 #include <ESPAsyncWebSrv.h>
+#include <Preferences.h>
 
+Preferences preferences;
 TaskHandle_t loop0Handle;
 
 const uint8_t PC_POWER_LED_SENSE_PIN = 12;
@@ -30,7 +32,7 @@ Adafruit_NeoPixel marqueePixels(NUMPIXELS, LED_STRIP_PIN, NEO_RGB + NEO_KHZ800);
 
 LightMode lightMode = LIGHT_MODE_OFF;
 uint32_t nextLedStripUpdate = 0;
-const uint16_t stripUpdateInterval = 1000 / 30; // 30 FPS
+const uint16_t stripUpdateInterval = 1000 / 60; // 60 FPS
 uint8_t ledBrightness = 0;
 uint8_t ledStrip_R = 255;
 uint8_t ledStrip_G = 255;

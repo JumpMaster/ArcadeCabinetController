@@ -17,20 +17,33 @@ void toggleResetSwitch()
     digitalWrite(PC_RESET_SWITCH_PIN, LOW);  // Reset Switch
 }
 
+void setLightMode(LightMode mode, bool saveValue = true)
+{
+    lightMode = mode;
+    if (saveValue)
+        preferences.putUChar("LightMode", lightMode);
+}
+
 void setMarqueeColor(uint8_t R, uint8_t G, uint8_t B)
 {
-    lightMode = LIGHT_MODE_SOLID;
+    
+    setLightMode(LIGHT_MODE_SOLID);
     marqueePixels.fill(Adafruit_NeoPixel::Color(R, G, B), 0, NUMPIXELS);
+    preferences.putUChar("Marquee_R", R);
+    preferences.putUChar("Marquee_G", G);
+    preferences.putUChar("Marquee_B", B);
 }
 
 void restartDevice(AsyncWebServerRequest *request)
 {
+    request->send(200, "application/json", "{\"message\":\"Restart confirmed\"}");
     ESP.restart();
 }
 
 void switchAmplifierState(bool state)
 {
     digitalWrite(AMP_POWER_ENABLE_PIN, state); // Turn on/off amplifier
+    preferences.putBool("AmplifierEnabled", state);
 }
 
 void mqttCallback(char* topic, byte* payload, unsigned int length)
@@ -149,12 +162,12 @@ void restLedControl(AsyncWebServerRequest *request)
         {
             if (request->getParam("mode")->value().indexOf("rainbow") >= 0)
             {
-                lightMode = LIGHT_MODE_RAINBOW;
+                setLightMode(LIGHT_MODE_RAINBOW);
                 Log.println("Mode set to rainbow");
             }
             else if (request->getParam("mode")->value().indexOf("off") >= 0)
             {
-                lightMode = LIGHT_MODE_OFF;
+                setLightMode(LIGHT_MODE_OFF);
                 Log.println("Mode set to off");
             }
             request->send(200, "application/json", "{\"message\":\"Mode set\"}");
@@ -179,6 +192,37 @@ void setupRestAPI()
     restAPIserver.begin();
 }
 
+void loadSavedPreferences()
+{
+    preferences.begin("arcadecabinet", false);
+
+    amplifierEnabled = preferences.getBool("AmplifierEnabled", true);
+    
+    if (preferences.getBool("PowerState") == true)
+    {
+        monitorPowerState(); // Lets check if the cabinet is powered on before continuing.
+
+        if (!cabinetPowerState) // If it's not powered on there's no need to restore the marquee light settings
+            return;
+
+        Log.println("Restoring preferences after unexpected restart");
+
+        LightMode mode = (LightMode) preferences.getUChar("LightMode", 0);
+        if (mode == LIGHT_MODE_SOLID)
+        {
+            uint8_t R = preferences.getUChar("Marquee_R", 255);
+            uint8_t G = preferences.getUChar("Marquee_G", 255);
+            uint8_t B = preferences.getUChar("Marquee_B", 255);
+            setMarqueeColor(R, G, B);
+        }
+        else
+        {
+            setLightMode(mode, false);
+        }
+        
+    }
+}
+
 void setup()
 {
     StandardSetup();
@@ -194,6 +238,8 @@ void setup()
     digitalWrite(PC_POWER_SWITCH_PIN, LOW);
     digitalWrite(PC_RESET_SWITCH_PIN, LOW);
     digitalWrite(AMP_POWER_ENABLE_PIN, LOW);
+
+    loadSavedPreferences();
 
     setupRestAPI();
     
@@ -229,7 +275,11 @@ void managePowerStateChanges()
 
         if (cabinetPowerState) // ON
         {
-            lightMode = LIGHT_MODE_RAINBOW;
+            if (lightMode == LIGHT_MODE_OFF)
+            {
+                setLightMode(LIGHT_MODE_RAINBOW);
+            }
+                
             diagnosticPixelColor2 = NEOPIXEL_MAGENTA;
             if (amplifierEnabled)
             {
@@ -238,10 +288,12 @@ void managePowerStateChanges()
         }
         else // OFF
         {
-            lightMode = LIGHT_MODE_OFF;
+            setLightMode(LIGHT_MODE_OFF);
             diagnosticPixelColor2 = NEOPIXEL_BLACK;
             switchAmplifierState(false);
         }
+
+        preferences.putBool("PowerState", cabinetPowerState);
     
         Log.printf("Cabinet powering %s\n", cabinetPowerState ? "on" : "off");
     }
@@ -287,6 +339,10 @@ void manageStartButton()
 
 void manageMarqueePixels()
 {
+
+    if (millis() < nextLedStripUpdate)
+        return;
+
     static uint16_t lightIndex = 0;
 
     if (ledBrightness == 0 && lightMode == LIGHT_MODE_OFF)
@@ -306,18 +362,14 @@ void manageMarqueePixels()
             marqueePixels.fill(marqueePixels.Color(ledStrip_R, ledStrip_G, ledStrip_B), 0, NUMPIXELS);
     }
 
-
-    //if (millis() < nextLedStripUpdate)
-    //    return;
-
     if (lightMode == LIGHT_MODE_RAINBOW)
     {
-        lightIndex += 50;
+        lightIndex += 100;
         marqueePixels.rainbow(lightIndex, 1);
     }
 
     marqueePixels.show();
-    //nextLedStripUpdate = millis() + stripUpdateInterval;
+    nextLedStripUpdate = millis() + stripUpdateInterval;
 }
 
 void manageLocalMQTT()
@@ -383,7 +435,7 @@ void manageSerialReceive()
 
                     if (requestedMode >= 0 and requestedMode <= 2)
                     {
-                        lightMode = (LightMode) requestedMode;
+                        setLightMode((LightMode) requestedMode);
                         Log.printf("Light mode set:%d\n", requestedMode);
                     }
                 }
@@ -398,8 +450,8 @@ void manageSerialReceive()
                     uint8_t R = strtol(HR, NULL, 16);
                     uint8_t G = strtol(HG, NULL, 16);
                     uint8_t B = strtol(HB, NULL, 16);
-                    Log.printf("%s:%s:%s - %d:%d:%d\n", HR, HG, HB, R, G, B);
                     setMarqueeColor(R, G, B);
+                    Log.printf("%s:%s:%s - %d:%d:%d\n", HR, HG, HB, R, G, B);
                 }
             }
 

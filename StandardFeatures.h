@@ -158,7 +158,8 @@ void setupOTA()
 void setupPixels()
 {
     pinMode(NEOPIXEL_POWER, OUTPUT);
-    digitalWrite(NEOPIXEL_POWER, HIGH);
+    digitalWrite(NEOPIXEL_POWER, LOW);
+    
     #ifdef DIAGNOSTIC_PIXEL_PIN
     diagnosticPixel.begin();
     diagnosticPixel.setPixelColor(0, NEOPIXEL_RED);
