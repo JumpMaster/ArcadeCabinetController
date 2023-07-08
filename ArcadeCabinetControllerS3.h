@@ -10,6 +10,14 @@
 #include <Preferences.h>
 
 Preferences preferences;
+const char *KEY_POWER_STATE = "power-state";
+const char *KEY_AMPLIFIER_ENABLED = "amp-enabled";
+const char *KEY_PARENTAL_MODE = "parental-mode";
+const char *KEY_MARQUEE_MODE = "marquee-mode";
+const char *KEY_MARQUEE_R = "marquee-r";
+const char *KEY_MARQUEE_G = "marquee-g";
+const char *KEY_MARQUEE_B = "marquee-b";
+
 TaskHandle_t loop0Handle;
 
 const uint8_t PC_POWER_LED_SENSE_PIN = 12;
@@ -34,9 +42,8 @@ LightMode lightMode = LIGHT_MODE_OFF;
 uint32_t nextLedStripUpdate = 0;
 const uint16_t stripUpdateInterval = 1000 / 60; // 60 FPS
 uint8_t ledBrightness = 0;
-uint8_t ledStrip_R = 255;
-uint8_t ledStrip_G = 255;
-uint8_t ledStrip_B = 255;
+uint8_t ledMarqueeColor[3] = { 255, 255, 255 };
+uint8_t ledMarqueeRequestedColor[3] = { 255, 255, 255 };
 
 bool player1ButtonState = false;
 bool resetButtonPressed = false;

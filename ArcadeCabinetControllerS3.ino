@@ -21,17 +21,25 @@ void setLightMode(LightMode mode, bool saveValue = true)
 {
     lightMode = mode;
     if (saveValue)
-        preferences.putUChar("LightMode", lightMode);
+        preferences.putUChar(KEY_MARQUEE_MODE, lightMode);
+
+    if (mode == LIGHT_MODE_OFF)
+    {
+        ledMarqueeColor[0] = 0;
+        ledMarqueeColor[1] = 0;
+        ledMarqueeColor[2] = 0;
+    }
 }
 
 void setMarqueeColor(uint8_t R, uint8_t G, uint8_t B)
 {
-    
+    ledMarqueeRequestedColor[0] = R;
+    ledMarqueeRequestedColor[1] = G;
+    ledMarqueeRequestedColor[2] = B;
     setLightMode(LIGHT_MODE_SOLID);
-    marqueePixels.fill(Adafruit_NeoPixel::Color(R, G, B), 0, NUMPIXELS);
-    preferences.putUChar("Marquee_R", R);
-    preferences.putUChar("Marquee_G", G);
-    preferences.putUChar("Marquee_B", B);
+    preferences.putUChar(KEY_MARQUEE_R, R);
+    preferences.putUChar(KEY_MARQUEE_G, G);
+    preferences.putUChar(KEY_MARQUEE_B, B);
 }
 
 void restartDevice(AsyncWebServerRequest *request)
@@ -40,10 +48,33 @@ void restartDevice(AsyncWebServerRequest *request)
     ESP.restart();
 }
 
-void switchAmplifierState(bool state)
+void setParentalMode(bool state)
+{
+    parentalMode = state;
+    preferences.putBool(KEY_PARENTAL_MODE, parentalMode);
+    mqttClient.publish(mqttParentalMode.getStateTopic().c_str(), parentalMode ? "ON" : "OFF", true);
+    Log.printf("Parental mode turned %s\n", parentalMode ? "on" : "off");
+}
+
+void setAmplifierState(bool state)
+{
+    amplifierEnabled = state;
+
+    preferences.putBool(KEY_AMPLIFIER_ENABLED, amplifierEnabled);
+
+    Log.printf("Amp %s\n", amplifierEnabled ? "on" : "off");
+
+    if (mqttClient.connected())
+    {
+        mqttClient.publish(mqttAmplifierEnabledSwitch.getStateTopic().c_str(), amplifierEnabled ? "ON" : "OFF", true);
+    }
+
+    switchAmplifier(cabinetPowerState && amplifierEnabled);
+}
+
+void switchAmplifier(bool state)
 {
     digitalWrite(AMP_POWER_ENABLE_PIN, state); // Turn on/off amplifier
-    preferences.putBool("AmplifierEnabled", state);
 }
 
 void mqttCallback(char* topic, byte* payload, unsigned int length)
@@ -52,7 +83,7 @@ void mqttCallback(char* topic, byte* payload, unsigned int length)
     memcpy(data, payload, length);
     data[length] = '\0';
 
-    Log.printf("%s : %s\n", topic, data);
+    //Log.printf("mqttCallback - %s : %s\n", topic, data);
 
     if (strcmp(topic, mqttPowerButton.getCommandTopic().c_str()) == 0)
     {
@@ -75,16 +106,8 @@ void mqttCallback(char* topic, byte* payload, unsigned int length)
     }
     else if (strcmp(mqttParentalMode.getCommandTopic().c_str(), topic) == 0)
     {
-        if (strcmp(data, "ON") == 0)
-        {
-            parentalMode = true;
-        }
-        else
-        {
-            parentalMode = false;
-        }
-        mqttClient.publish(mqttParentalMode.getStateTopic().c_str(), data, true);
-        Log.printf("Parental mode turned %s\n", parentalMode ? "on" : "off");
+        bool mode = strcmp(data, "ON") == 0;
+        setParentalMode(mode);
     }
     else if (strcmp(topic, mqttVolumeMuteButton.getCommandTopic().c_str()) == 0)
     {
@@ -106,21 +129,8 @@ void mqttCallback(char* topic, byte* payload, unsigned int length)
     }
     else if (strcmp(mqttAmplifierEnabledSwitch.getCommandTopic().c_str(), topic) == 0)
     {
-        if (strcmp(data, "ON") == 0)
-        {
-            Log.println("Amp On");
-            amplifierEnabled = true;
-        }
-        else
-        {
-            Log.println("Amp Off");
-            amplifierEnabled = false;
-        }
-        if (cabinetPowerState)
-        {
-            switchAmplifierState(amplifierEnabled);
-        }
-        mqttClient.publish(mqttAmplifierEnabledSwitch.getStateTopic().c_str(), data, true);
+        bool state = strcmp(data, "ON") == 0;
+        setAmplifierState(state);
     }
 }
 
@@ -139,13 +149,13 @@ void restLedControl(AsyncWebServerRequest *request)
             request->hasParam("g") &&
             request->hasParam("b"))
         {
-            uint8_t r, g, b;
-            ledStrip_R = request->getParam("r")->value().toInt();
-            ledStrip_G = request->getParam("g")->value().toInt();
-            ledStrip_B = request->getParam("b")->value().toInt();
-            Log.printf("setColor %d:%d:%d\n",  ledStrip_R, ledStrip_G, ledStrip_B);
+            uint8_t R, G, B;
+            R = request->getParam("r")->value().toInt();
+            G = request->getParam("g")->value().toInt();
+            B = request->getParam("b")->value().toInt();
+            Log.printf("setColor %d:%d:%d\n",  R, G, B);
             
-            setMarqueeColor(ledStrip_R, ledStrip_G, ledStrip_B);
+            setMarqueeColor(R, G, B);
 
             request->send(200, "application/json", "{\"message\":\"RGB set\"}");
             return;
@@ -194,11 +204,15 @@ void setupRestAPI()
 
 void loadSavedPreferences()
 {
-    preferences.begin("arcadecabinet", false);
+    preferences.begin("arcadecabinet");
 
-    amplifierEnabled = preferences.getBool("AmplifierEnabled", true);
+    bool ampState = preferences.getBool(KEY_AMPLIFIER_ENABLED, true);
+    setAmplifierState(ampState);
+
+    bool pMode = preferences.getBool(KEY_PARENTAL_MODE, false);
+    setParentalMode(pMode);
     
-    if (preferences.getBool("PowerState") == true)
+    if (preferences.getBool(KEY_POWER_STATE) == true)
     {
         monitorPowerState(); // Lets check if the cabinet is powered on before continuing.
 
@@ -207,12 +221,13 @@ void loadSavedPreferences()
 
         Log.println("Restoring preferences after unexpected restart");
 
-        LightMode mode = (LightMode) preferences.getUChar("LightMode", 0);
+        LightMode mode = (LightMode) preferences.getUChar(KEY_MARQUEE_MODE, 0);
+
         if (mode == LIGHT_MODE_SOLID)
         {
-            uint8_t R = preferences.getUChar("Marquee_R", 255);
-            uint8_t G = preferences.getUChar("Marquee_G", 255);
-            uint8_t B = preferences.getUChar("Marquee_B", 255);
+            uint8_t R = preferences.getUChar(KEY_MARQUEE_R, 255);
+            uint8_t G = preferences.getUChar(KEY_MARQUEE_G, 255);
+            uint8_t B = preferences.getUChar(KEY_MARQUEE_B, 255);
             setMarqueeColor(R, G, B);
         }
         else
@@ -281,20 +296,15 @@ void managePowerStateChanges()
             }
                 
             diagnosticPixelColor2 = NEOPIXEL_MAGENTA;
-            if (amplifierEnabled)
-            {
-                switchAmplifierState(true);
-            }
         }
         else // OFF
         {
             setLightMode(LIGHT_MODE_OFF);
             diagnosticPixelColor2 = NEOPIXEL_BLACK;
-            switchAmplifierState(false);
         }
 
-        preferences.putBool("PowerState", cabinetPowerState);
-    
+        switchAmplifier(amplifierEnabled);
+        preferences.putBool(KEY_POWER_STATE, cabinetPowerState);
         Log.printf("Cabinet powering %s\n", cabinetPowerState ? "on" : "off");
     }
 }
@@ -358,14 +368,37 @@ void manageMarqueePixels()
     {
         marqueePixels.setBrightness(ledBrightness);
 
-        if (lightMode == LIGHT_MODE_SOLID)
-            marqueePixels.fill(marqueePixels.Color(ledStrip_R, ledStrip_G, ledStrip_B), 0, NUMPIXELS);
+        //if (lightMode == LIGHT_MODE_SOLID)
+        //    marqueePixels.fill(marqueePixels.Color(ledStrip_R, ledStrip_G, ledStrip_B), 0, NUMPIXELS);
     }
 
     if (lightMode == LIGHT_MODE_RAINBOW)
     {
         lightIndex += 100;
         marqueePixels.rainbow(lightIndex, 1);
+    }
+    else if (lightMode == LIGHT_MODE_SOLID)
+    {
+        if (ledMarqueeRequestedColor[0] != ledMarqueeColor[0] ||
+            ledMarqueeRequestedColor[1] != ledMarqueeColor[1] ||
+            ledMarqueeRequestedColor[2] != ledMarqueeColor[2]);
+        {
+            for (uint8_t i = 0; i <= 3; i++)
+            {
+                if (ledMarqueeRequestedColor[i] == ledMarqueeColor[i])
+                    continue;
+
+                if (ledMarqueeColor[i] > ledMarqueeRequestedColor[i])
+                {
+                    ledMarqueeColor[i]--;
+                }
+                else
+                {
+                    ledMarqueeColor[i]++;
+                }
+            }
+            marqueePixels.fill(marqueePixels.Color(ledMarqueeColor[0], ledMarqueeColor[1], ledMarqueeColor[2]), 0, NUMPIXELS);
+        }
     }
 
     marqueePixels.show();
@@ -388,6 +421,7 @@ void manageLocalMQTT()
 
         mqttClient.publish(mqttPowerState.getStateTopic().c_str(), cabinetPowerState ? "ON" : "OFF", true);
         mqttClient.publish(mqttParentalMode.getStateTopic().c_str(), parentalMode ? "ON" : "OFF", true);
+        mqttClient.publish(mqttAmplifierEnabledSwitch.getStateTopic().c_str(), amplifierEnabled ? "ON" : "OFF", true);
 
         mqttClient.subscribe(mqttPowerButton.getCommandTopic().c_str());
         mqttClient.subscribe(mqttParentalMode.getCommandTopic().c_str());
@@ -408,7 +442,7 @@ void manageLocalMQTT()
 
 void manageSerialReceive()
 {
-    const uint8_t MAX_MESSAGE_LENGTH = 255;
+    const uint8_t MAX_MESSAGE_LENGTH = 8; // MFFFFFF
     static char message[MAX_MESSAGE_LENGTH];
     static unsigned int message_pos = 0;
     uint32_t message_timeout = 0;
@@ -422,7 +456,16 @@ void manageSerialReceive()
 
         char buffer = Serial.read();
 
-        if (millis() > message_timeout || (message_pos > 0 && (buffer == 13 || buffer == 10)))
+        if (buffer != 13 && buffer != 10)
+        {
+            message[message_pos++] = buffer;
+        }
+
+        if (
+            millis() > message_timeout ||
+            message_pos >= (MAX_MESSAGE_LENGTH-1) ||
+            (message_pos > 0 && (buffer == 13 || buffer == 10))
+           )
         {
             message[message_pos] = '\0';
 
@@ -457,10 +500,6 @@ void manageSerialReceive()
 
             message_pos = 0;
             message_timeout = 0;
-        }
-        else if (buffer != 13 && buffer != 10)
-        {
-            message[message_pos++] = buffer;
         }
     }
 }
