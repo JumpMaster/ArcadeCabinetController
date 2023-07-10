@@ -18,8 +18,6 @@ const char *KEY_MARQUEE_R = "marquee-r";
 const char *KEY_MARQUEE_G = "marquee-g";
 const char *KEY_MARQUEE_B = "marquee-b";
 
-TaskHandle_t loop0Handle;
-
 const uint8_t PC_POWER_LED_SENSE_PIN = 12;
 const uint8_t PLAYER1_BUTTON_INPUT_PIN = 10;
 const uint8_t LED_STRIP_PIN = 8;
@@ -40,7 +38,7 @@ Adafruit_NeoPixel marqueePixels(NUMPIXELS, LED_STRIP_PIN, NEO_RGB + NEO_KHZ800);
 
 LightMode lightMode = LIGHT_MODE_OFF;
 uint32_t nextLedStripUpdate = 0;
-const uint16_t stripUpdateInterval = 1000 / 60; // 60 FPS
+const uint16_t stripUpdateInterval = 1000 / 120; // 120 FPS
 uint8_t ledBrightness = 0;
 uint8_t ledMarqueeColor[3] = { 255, 255, 255 };
 uint8_t ledMarqueeRequestedColor[3] = { 255, 255, 255 };
@@ -68,8 +66,8 @@ HAMqttDevice mqttVolumeMuteButton("ArcadeCabinet Mute Button", HAMqttDevice::BUT
 HAMqttDevice mqttVolumeUpButton("ArcadeCabinet Volume Up Button", HAMqttDevice::BUTTON, "homeassistant");
 HAMqttDevice mqttVolumeDownButton("ArcadeCabinet Volume Down Button", HAMqttDevice::BUTTON, "homeassistant");
 
-volatile bool parentalMode = false;
-volatile bool cabinetPowerState = LOW;
+bool parentalMode = false;
+bool cabinetPowerState = LOW;
 bool managedPowerState = LOW;
 bool reportedPowerState = cabinetPowerState;
 

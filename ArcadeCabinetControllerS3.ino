@@ -261,15 +261,9 @@ void setup()
     Keyboard.begin();
     USB.begin();
 
-    //create a task that will be executed in the Task1code() function, with priority 1 and executed on core 0
-    xTaskCreatePinnedToCore(
-                    loop0,          // Task function.
-                    "Task0",        // name of task.
-                    10000,          // Stack size of task
-                    NULL,           // parameter of the task
-                    0,              // priority of the task
-                    &loop0Handle,   // Task handle to keep track of created task
-                    0);             // pin task to core 0
+    setupMarquee();
+
+    player1Button.begin();
 }
 
 void monitorPowerState()
@@ -509,26 +503,14 @@ void loop()
     StandardLoop();
 
     manageLocalMQTT();
+
+    manageStartButton();
+
+    monitorPowerState();
+
+    managePowerStateChanges();
+
+    manageMarqueePixels();
+
+    manageSerialReceive();
 };
-
-void loop0(void * pvParameters)
-{
-    // Setup
-    setupMarquee();
-
-    player1Button.begin();
-
-    // Loop
-    for(;;)
-    {
-        manageStartButton();
-
-        monitorPowerState();
-
-        managePowerStateChanges();
-
-        manageMarqueePixels();
-
-        manageSerialReceive();
-    }
-}
