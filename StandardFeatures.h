@@ -30,7 +30,7 @@ uint8_t diagnosticPixelMaxBrightness = 64;
 uint8_t diagnosticPixelBrightness = diagnosticPixelMaxBrightness;
 bool diagnosticPixelBrightnessDirection = 0;
 uint32_t diagnosticPixelColor1 = 0xFF0000;
-volatile uint32_t diagnosticPixelColor2 = 0x000000;
+uint32_t diagnosticPixelColor2 = 0x000000;
 uint32_t currentDiagnosticPixelColor = diagnosticPixelColor1;
 uint32_t nextDiagnosticPixelUpdate = 0;
 #endif
@@ -155,20 +155,14 @@ void setupOTA()
     ArduinoOTA.begin();
 }
 
-void setupPixels()
+#ifdef DIAGNOSTIC_LED_PIN
+void setupDiagnosticLed()
 {
     pinMode(NEOPIXEL_POWER, OUTPUT);
-    digitalWrite(NEOPIXEL_POWER, LOW);
-    
-    #ifdef DIAGNOSTIC_PIXEL_PIN
-    diagnosticPixel.begin();
-    diagnosticPixel.setPixelColor(0, NEOPIXEL_RED);
-    diagnosticPixel.setBrightness(diagnosticPixelMaxBrightness);
-    diagnosticPixel.show();
-    #endif
+    digitalWrite(NEOPIXEL_POWER, HIGH);
 }
 
-void manageOnboardLED()
+void manageDiagnosticLed()
 {
     if (millis() < nextOnboardLedUpdate)
         return;
@@ -177,6 +171,50 @@ void manageOnboardLED()
     onboardLedState = !onboardLedState;
     digitalWrite(ONBOARD_LED_PIN, onboardLedState ? HIGH : LOW);
 }
+#endif
+
+#ifdef DIAGNOSTIC_PIXEL_PIN
+void setupDiagnosticPixel()
+{   
+    diagnosticPixel.begin();
+    diagnosticPixel.setPixelColor(0, NEOPIXEL_RED);
+    diagnosticPixel.setBrightness(diagnosticPixelMaxBrightness);
+    diagnosticPixel.show();
+}
+
+void manageDiagnosticPixel()
+{
+    if (millis() < nextDiagnosticPixelUpdate)
+        return;
+
+    if (mqttClient.connected())
+        diagnosticPixelColor1 = NEOPIXEL_GREEN;
+    else if (WiFi.status() == WL_CONNECTED)
+        diagnosticPixelColor1 = NEOPIXEL_BLUE;
+    else    
+        diagnosticPixelColor1 = NEOPIXEL_RED;
+    
+    if (diagnosticPixelBrightness <= 0)
+    {
+        diagnosticPixelBrightnessDirection = 1;
+        if (diagnosticPixelColor2 != NEOPIXEL_BLACK && currentDiagnosticPixelColor == diagnosticPixelColor1)
+            currentDiagnosticPixelColor = diagnosticPixelColor2;
+        else
+            currentDiagnosticPixelColor = diagnosticPixelColor1;
+    }
+    else if (diagnosticPixelBrightness >= diagnosticPixelMaxBrightness)
+    {
+        diagnosticPixelBrightnessDirection = 0;
+    }
+    
+    diagnosticPixelBrightness = diagnosticPixelBrightnessDirection ? diagnosticPixelBrightness+1 : diagnosticPixelBrightness-1;
+    diagnosticPixel.setPixelColor(0, currentDiagnosticPixelColor);
+    diagnosticPixel.setBrightness(diagnosticPixelBrightness);
+    diagnosticPixel.show();
+
+    nextDiagnosticPixelUpdate = millis() + 33; // 33 = 30 FPS
+}
+#endif
 
 void sendTelegrafMetrics()
 {
@@ -217,49 +255,18 @@ void manageMQTT()
     }
 }
 
-#ifdef DIAGNOSTIC_PIXEL_PIN
-void manageDiagnosticPixel()
-{
-    if (millis() < nextDiagnosticPixelUpdate)
-        return;
-
-    if (mqttClient.connected())
-        diagnosticPixelColor1 = NEOPIXEL_GREEN;
-    else if (WiFi.status() == WL_CONNECTED)
-        diagnosticPixelColor1 = NEOPIXEL_BLUE;
-    else    
-        diagnosticPixelColor1 = NEOPIXEL_RED;
-    
-    if (diagnosticPixelBrightness <= 0)
-    {
-        diagnosticPixelBrightnessDirection = 1;
-        if (diagnosticPixelColor2 != NEOPIXEL_BLACK && currentDiagnosticPixelColor == diagnosticPixelColor1)
-            currentDiagnosticPixelColor = diagnosticPixelColor2;
-        else
-            currentDiagnosticPixelColor = diagnosticPixelColor1;
-    }
-    else if (diagnosticPixelBrightness >= diagnosticPixelMaxBrightness)
-    {
-        diagnosticPixelBrightnessDirection = 0;
-    }
-    
-    diagnosticPixelBrightness = diagnosticPixelBrightnessDirection ? diagnosticPixelBrightness+1 : diagnosticPixelBrightness-1;
-    diagnosticPixel.setPixelColor(0, currentDiagnosticPixelColor);
-    diagnosticPixel.setBrightness(diagnosticPixelBrightness);
-    diagnosticPixel.show();
-
-    nextDiagnosticPixelUpdate = millis() + 33; // 33 = 30 FPS
-}
-#endif
 
 void StandardSetup()
 {
     Log.setup();
 
-    pinMode(ONBOARD_LED_PIN, OUTPUT);
-    digitalWrite(ONBOARD_LED_PIN, HIGH);
+    #ifdef DIAGNOSTIC_LED_PIN
+    setupDiagnosticLed();
+    #endif
 
-    setupPixels();
+    #ifdef DIAGNOSTIC_PIXEL_PIN
+    setupDiagnosticPixel();
+    #endif
 
     setupMQTT();
 
@@ -278,7 +285,10 @@ void StandardLoop()
 
     manageMQTT();
 
-    manageOnboardLED();
+    #ifdef DIAGNOSTIC_LED_PIN
+    manageDiagnosticLed();
+    #endif
+
     #ifdef DIAGNOSTIC_PIXEL_PIN
     manageDiagnosticPixel();
     #endif
