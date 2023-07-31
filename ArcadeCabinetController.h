@@ -5,7 +5,7 @@
 #include "USBHIDKeyboard.h"
 #include <EasyButton.h>
 #include "HAMqttDevice.h"
-#include <Adafruit_NeoPixel.h>
+#include <Adafruit_NeoPXL8.h>
 #include <ESPAsyncWebSrv.h>
 #include <Preferences.h>
 
@@ -34,7 +34,8 @@ typedef enum
 } LightMode;
 
 const uint8_t NUMPIXELS = 34;
-Adafruit_NeoPixel marqueePixels(NUMPIXELS, LED_STRIP_PIN, NEO_RGB + NEO_KHZ800);
+int8_t ledPins[8] = { LED_STRIP_PIN, -1, -1, -1, -1, -1, -1, -1 };
+Adafruit_NeoPXL8 marqueePixels(NUMPIXELS, ledPins, NEO_RGB);
 
 LightMode lightMode = LIGHT_MODE_OFF;
 uint32_t nextLedStripUpdate = 0;
