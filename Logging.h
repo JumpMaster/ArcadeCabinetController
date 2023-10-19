@@ -3,7 +3,7 @@
 
 #define SYSLOG_SERVER   "lb.home.cooper.uk";
 #define SYSLOG_PORT     514
-#define APP_NAME        "ArcadeCabinetController-S3"
+#define APP_NAME        "ArcadeCabinetController"
 
 #ifdef ESP32
 #include <WiFi.h>

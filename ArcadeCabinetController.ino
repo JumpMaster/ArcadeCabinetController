@@ -2,7 +2,7 @@
 #define DIAGNOSTIC_LED_PIN  13
 
 #include "StandardFeatures.h"
-#include "ArcadeCabinetControllerS3.h"
+#include "ArcadeCabinetController.h"
 
 void togglePowerSwitch()
 {
@@ -194,6 +194,21 @@ void restLedControl(AsyncWebServerRequest *request)
     request->send(200, "application/json", "{\"message\":\"Unknown request\"}");
 }
 
+void setupLocalMQTT()
+{
+    mqttPowerButton.addConfigVar("device", deviceConfig);
+    mqttPowerState.addConfigVar("device", deviceConfig);
+    mqttParentalMode.addConfigVar("device", deviceConfig);
+    mqttAmplifierEnabledSwitch.addConfigVar("device", deviceConfig);
+    mqttVolumeMuteButton.addConfigVar("device", deviceConfig);
+    mqttVolumeUpButton.addConfigVar("device", deviceConfig);
+    mqttVolumeDownButton.addConfigVar("device", deviceConfig);
+
+    mqttClient.setCallback(mqttCallback);
+
+    mqttReconnected = true;
+}
+
 void setupRestAPI()
 {
     // Function to be exposed
@@ -241,9 +256,9 @@ void loadSavedPreferences()
 
 void setup()
 {
+    setupLocalMQTT();
+    
     StandardSetup();
-
-    mqttClient.setCallback(mqttCallback);
 
     pinMode(PC_POWER_LED_SENSE_PIN, INPUT_PULLUP);
 
@@ -344,7 +359,6 @@ void manageStartButton()
 
 void manageMarqueePixels()
 {
-
     if (millis() < nextLedStripUpdate)
         return;
 
@@ -370,7 +384,25 @@ void manageMarqueePixels()
     if (lightMode == LIGHT_MODE_RAINBOW)
     {
         lightIndex += 100;
-        marqueePixels.rainbow(lightIndex, 1);
+        //marqueePixels.rainbow(lightIndex, 1);
+
+        const uint8_t saturation = 255;
+        const uint8_t brightness = 255;
+        const uint8_t whiteBuffer = 5;
+
+        for (uint16_t i = whiteBuffer; i < (NUMPIXELS - whiteBuffer); i++)
+        {
+            uint16_t hue = lightIndex + (i * 65536) / (NUMPIXELS-(whiteBuffer*2));
+            uint32_t color = marqueePixels.ColorHSV(hue, saturation, brightness);
+            color = marqueePixels.gamma32(color);
+            marqueePixels.setPixelColor(i, color);
+        }
+
+        for (uint16_t i = 0; i < whiteBuffer; i++)
+        {
+            marqueePixels.setPixelColor(i, NEOPIXEL_WHITE);
+            marqueePixels.setPixelColor(NUMPIXELS-1-i, NEOPIXEL_WHITE);
+        }
     }
     else if (lightMode == LIGHT_MODE_SOLID)
     {

@@ -59,13 +59,13 @@ USBHIDKeyboard Keyboard;
 
 const char* deviceConfig = "{\"identifiers\":\"be6beb17-0012-4a70-bc76-a484d34de5cb\",\"name\":\"ArcadeCabinet\",\"sw_version\":\"1.0\",\"model\":\"ArcadeCabinet\",\"manufacturer\":\"JumpMaster\"}";
 
-HAMqttDevice mqttPowerButton("ArcadeCabinet Power Button", HAMqttDevice::BUTTON, "homeassistant");
-HAMqttDevice mqttPowerState("ArcadeCabinet Power State", HAMqttDevice::BINARY_SENSOR, "homeassistant");
-HAMqttDevice mqttParentalMode("ArcadeCabinet Parental Mode", HAMqttDevice::SWITCH, "homeassistant");
-HAMqttDevice mqttAmplifierEnabledSwitch("ArcadeCabinet Amplifier", HAMqttDevice::SWITCH, "homeassistant");
-HAMqttDevice mqttVolumeMuteButton("ArcadeCabinet Mute Button", HAMqttDevice::BUTTON, "homeassistant");
-HAMqttDevice mqttVolumeUpButton("ArcadeCabinet Volume Up Button", HAMqttDevice::BUTTON, "homeassistant");
-HAMqttDevice mqttVolumeDownButton("ArcadeCabinet Volume Down Button", HAMqttDevice::BUTTON, "homeassistant");
+HAMqttDevice mqttPowerButton("Power Button", HAMqttDevice::BUTTON, "3cabc108-a89c-4a93-9816-0610bff44197", "homeassistant");
+HAMqttDevice mqttPowerState("Power State", HAMqttDevice::BINARY_SENSOR, "b420a188-9f30-419d-b7ca-738531a59823", "homeassistant");
+HAMqttDevice mqttParentalMode("Parental Mode", HAMqttDevice::SWITCH, "980483e9-5c6c-439c-aa43-f50fb9096bc1", "homeassistant");
+HAMqttDevice mqttAmplifierEnabledSwitch("Amplifier", HAMqttDevice::SWITCH, "86c73b4a-b2b5-4113-bcd6-ac7fe0625f6f", "homeassistant");
+HAMqttDevice mqttVolumeMuteButton("Mute Button", HAMqttDevice::BUTTON, "4e3b7725-32a9-46b7-a30b-21293d7342b7", "homeassistant");
+HAMqttDevice mqttVolumeUpButton("Volume Up Button", HAMqttDevice::BUTTON, "092b3588-ca1a-4e20-8e56-cf78fc21cea8", "homeassistant");
+HAMqttDevice mqttVolumeDownButton("Volume Down Button", HAMqttDevice::BUTTON,"039fc8f8-29e2-4da4-b162-0c5cb90316c8", "homeassistant");
 
 bool parentalMode = false;
 bool cabinetPowerState = LOW;
