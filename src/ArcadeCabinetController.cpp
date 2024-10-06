@@ -4,6 +4,10 @@
 #include "StandardFeatures.h"
 #include "ArcadeCabinetController.h"
 
+void player1ButtonHandler(Button2& btn);
+void switchAmplifier(bool state);
+void monitorPowerState();
+
 void togglePowerSwitch()
 {
     digitalWrite(PC_POWER_SWITCH_PIN, HIGH); // Power Switch
@@ -41,12 +45,6 @@ void setMarqueeColor(uint8_t R, uint8_t G, uint8_t B)
     preferences.putUChar(KEY_MARQUEE_R, R);
     preferences.putUChar(KEY_MARQUEE_G, G);
     preferences.putUChar(KEY_MARQUEE_B, B);
-}
-
-void restartDevice(AsyncWebServerRequest *request)
-{
-    request->send(200, "application/json", "{\"message\":\"Restart confirmed\"}");
-    ESP.restart();
 }
 
 void setParentalMode(bool state)
@@ -142,58 +140,6 @@ void setupMarquee()
     marqueePixels.show(); 
 }
 
-void restLedControl(AsyncWebServerRequest *request)
-{
-    if (request->url().indexOf("setColor") >= 0)
-    {
-        if (request->hasParam("r") &&
-            request->hasParam("g") &&
-            request->hasParam("b"))
-        {
-            uint8_t R, G, B;
-            R = request->getParam("r")->value().toInt();
-            G = request->getParam("g")->value().toInt();
-            B = request->getParam("b")->value().toInt();
-            Log.printf("setColor %d:%d:%d\n",  R, G, B);
-            
-            setMarqueeColor(R, G, B);
-
-            request->send(200, "application/json", "{\"message\":\"RGB set\"}");
-            return;
-        }
-        else
-        {
-            request->send(200, "application/json", "{\"message\":\"Missing params\"}");
-            return;
-        }
-    }
-    else if (request->url().indexOf("setMode") >= 0)
-    {
-        if (request->hasParam("mode"))
-        {
-            if (request->getParam("mode")->value().indexOf("rainbow") >= 0)
-            {
-                setLightMode(LIGHT_MODE_RAINBOW);
-                Log.println("Mode set to rainbow");
-            }
-            else if (request->getParam("mode")->value().indexOf("off") >= 0)
-            {
-                setLightMode(LIGHT_MODE_OFF);
-                Log.println("Mode set to off");
-            }
-            request->send(200, "application/json", "{\"message\":\"Mode set\"}");
-            return;
-        }
-        else
-        {
-            request->send(200, "application/json", "{\"message\":\"Missing params\"}");
-            return;
-        }
-    }
-
-    request->send(200, "application/json", "{\"message\":\"Unknown request\"}");
-}
-
 void setupLocalMQTT()
 {
     mqttPowerButton.addConfigVar("device", deviceConfig);
@@ -207,15 +153,6 @@ void setupLocalMQTT()
     mqttClient.setCallback(mqttCallback);
 
     mqttReconnected = true;
-}
-
-void setupRestAPI()
-{
-    // Function to be exposed
-    restAPIserver.on("/led", restLedControl);
-    restAPIserver.on("/restart", restartDevice);
-    // start server
-    restAPIserver.begin();
 }
 
 void loadSavedPreferences()
@@ -271,15 +208,15 @@ void setup()
     digitalWrite(AMP_POWER_ENABLE_PIN, LOW);
 
     loadSavedPreferences();
-
-    setupRestAPI();
     
     Keyboard.begin();
     USB.begin();
 
     setupMarquee();
 
-    player1Button.begin();
+    player1Button.begin(PLAYER1_BUTTON_INPUT_PIN, INPUT, true /* ActiveLow */);
+    player1Button.setLongClickTime(longClickTimePowerOn);
+    player1Button.setLongClickDetectedHandler(player1ButtonHandler);
 }
 
 void monitorPowerState()
@@ -306,11 +243,13 @@ void managePowerStateChanges()
             }
                 
             diagnosticPixelColor2 = NEOPIXEL_MAGENTA;
+            player1Button.setLongClickTime(longClickTimeReset);
         }
         else // OFF
         {
             setLightMode(LIGHT_MODE_OFF);
             diagnosticPixelColor2 = NEOPIXEL_BLACK;
+            player1Button.setLongClickTime(longClickTimePowerOn);
         }
 
         switchAmplifier(amplifierEnabled);
@@ -319,42 +258,16 @@ void managePowerStateChanges()
     }
 }
 
-void manageStartButton()
+void player1ButtonHandler(Button2& btn)
 {
-    // MANAGE PLAYER 1 START BUTTON
-    player1Button.read();
-    player1Button.update();
-
+    
     if (cabinetPowerState == HIGH)
     {
-        if (player1Button.pressedFor(15000) && !resetButtonPressed)
-        {
-            toggleResetSwitch();
-            Log.println("Reset button pressed");
-            resetButtonPressed = true;
-        }
+        toggleResetSwitch();
     }
     else if (cabinetPowerState == LOW && !parentalMode)
     {
-        if (player1Button.pressedFor(300) && !powerButtonPressed)
-        {
-            togglePowerSwitch();
-            Log.println("Power button pressed");
-            powerButtonPressed = true;
-        }
-    }
-
-    if (player1Button.isPressed() != player1ButtonState)
-    {
-        player1ButtonState = player1Button.isPressed();
-        //Log.println(player1ButtonState ? "PRESSED" : "RELEASED");
-
-        if (!player1ButtonState)
-        {
-            powerButtonPressed = false;
-            resetButtonPressed = false;
-        }
-    }
+        togglePowerSwitch();
 }
 
 void manageMarqueePixels()
@@ -537,7 +450,7 @@ void loop()
 
     manageLocalMQTT();
 
-    manageStartButton();
+    player1Button.loop();
 
     monitorPowerState();
 

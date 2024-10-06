@@ -3,11 +3,14 @@
 HAMqttDevice::HAMqttDevice(
     const String &name,
     const DeviceType type,
-    const String &identifier,
     const String &haMQTTPrefix) : _name(name),
-                                  _type(type),
-                                  _identifier(identifier)
+                                  _type(type)
 {
+    // Id = name to lower case replacing spaces by underscore (ex: name="Kitchen Light" -> id="kitchen_light")
+    _identifier = name;
+    _identifier.replace(' ', '_');
+    _identifier.toLowerCase();
+
     // Define the MQTT topic of the device
     _topic = haMQTTPrefix + '/' + deviceTypeToStr(_type) + '/' + _identifier;
 

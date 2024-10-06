@@ -28,8 +28,8 @@ private:
     // Device proprieties
     const String _name;
     const DeviceType _type;
-    const String _identifier;
 
+    String _identifier;
     String _topic;
 
     // Config variables handling
@@ -52,8 +52,7 @@ public:
     HAMqttDevice(
         const String &name,
         const DeviceType type,
-        const String &identifier,
-        const String &haMQTTPrefix = "ha");
+        const String &haMQTTPrefix = "homeassistant");
 
     ~HAMqttDevice();
 

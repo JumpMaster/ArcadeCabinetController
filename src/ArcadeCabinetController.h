@@ -3,10 +3,9 @@
 
 #include "USB.h"
 #include "USBHIDKeyboard.h"
-#include <EasyButton.h>
+#include "Button2.h"
 #include "HAMqttDevice.h"
 #include <Adafruit_NeoPXL8.h>
-#include <ESPAsyncWebSrv.h>
 #include <Preferences.h>
 
 Preferences preferences;
@@ -44,28 +43,24 @@ uint8_t ledBrightness = 0;
 uint8_t ledMarqueeColor[3] = { 255, 255, 255 };
 uint8_t ledMarqueeRequestedColor[3] = { 255, 255, 255 };
 
-bool player1ButtonState = false;
-bool resetButtonPressed = false;
-bool powerButtonPressed = false;
-//EasyButton player1Button(PLAYER1_BUTTON_INPUT_PIN, debounce, pullup, invert);
-EasyButton player1Button(PLAYER1_BUTTON_INPUT_PIN, 60, true, true);
+Button2 player1Button;
+uint32_t longClickTimePowerOn = 300UL;
+uint32_t longClickTimeReset = 10000UL;
 
 bool amplifierEnabled = true;
 bool startupComplete = false;
 
-AsyncWebServer restAPIserver(80);
-
 USBHIDKeyboard Keyboard;
 
-const char* deviceConfig = "{\"identifiers\":\"be6beb17-0012-4a70-bc76-a484d34de5cb\",\"name\":\"ArcadeCabinet\",\"sw_version\":\"1.0\",\"model\":\"ArcadeCabinet\",\"manufacturer\":\"JumpMaster\"}";
+const char* deviceConfig = "{\"identifiers\":\"be6beb17-0012-4a70-bc76-a484d34de5cb\",\"name\":\"ArcadeCabinet\",\"sw_version\":\"2024.10.0\",\"model\":\"ArcadeCabinet\",\"manufacturer\":\"JumpMaster\"}";
 
-HAMqttDevice mqttPowerButton("Power Button", HAMqttDevice::BUTTON, "3cabc108-a89c-4a93-9816-0610bff44197", "homeassistant");
-HAMqttDevice mqttPowerState("Power State", HAMqttDevice::BINARY_SENSOR, "b420a188-9f30-419d-b7ca-738531a59823", "homeassistant");
-HAMqttDevice mqttParentalMode("Parental Mode", HAMqttDevice::SWITCH, "980483e9-5c6c-439c-aa43-f50fb9096bc1", "homeassistant");
-HAMqttDevice mqttAmplifierEnabledSwitch("Amplifier", HAMqttDevice::SWITCH, "86c73b4a-b2b5-4113-bcd6-ac7fe0625f6f", "homeassistant");
-HAMqttDevice mqttVolumeMuteButton("Mute Button", HAMqttDevice::BUTTON, "4e3b7725-32a9-46b7-a30b-21293d7342b7", "homeassistant");
-HAMqttDevice mqttVolumeUpButton("Volume Up Button", HAMqttDevice::BUTTON, "092b3588-ca1a-4e20-8e56-cf78fc21cea8", "homeassistant");
-HAMqttDevice mqttVolumeDownButton("Volume Down Button", HAMqttDevice::BUTTON,"039fc8f8-29e2-4da4-b162-0c5cb90316c8", "homeassistant");
+HAMqttDevice mqttPowerButton("Power Button", HAMqttDevice::BUTTON);
+HAMqttDevice mqttPowerState("Power State", HAMqttDevice::BINARY_SENSOR);
+HAMqttDevice mqttParentalMode("Parental Mode", HAMqttDevice::SWITCH);
+HAMqttDevice mqttAmplifierEnabledSwitch("Amplifier", HAMqttDevice::SWITCH);
+HAMqttDevice mqttVolumeMuteButton("Mute Button", HAMqttDevice::BUTTON);
+HAMqttDevice mqttVolumeUpButton("Volume Up Button", HAMqttDevice::BUTTON);
+HAMqttDevice mqttVolumeDownButton("Volume Down Button", HAMqttDevice::BUTTON);
 
 bool parentalMode = false;
 bool cabinetPowerState = LOW;
