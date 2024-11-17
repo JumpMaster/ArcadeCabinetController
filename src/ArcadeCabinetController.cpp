@@ -268,6 +268,7 @@ void player1ButtonHandler(Button2& btn)
     else if (cabinetPowerState == LOW && !parentalMode)
     {
         togglePowerSwitch();
+    }
 }
 
 void manageMarqueePixels()

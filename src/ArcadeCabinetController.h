@@ -54,13 +54,13 @@ USBHIDKeyboard Keyboard;
 
 const char* deviceConfig = "{\"identifiers\":\"be6beb17-0012-4a70-bc76-a484d34de5cb\",\"name\":\"ArcadeCabinet\",\"sw_version\":\"2024.10.0\",\"model\":\"ArcadeCabinet\",\"manufacturer\":\"JumpMaster\"}";
 
-HAMqttDevice mqttPowerButton("Power Button", HAMqttDevice::BUTTON);
-HAMqttDevice mqttPowerState("Power State", HAMqttDevice::BINARY_SENSOR);
-HAMqttDevice mqttParentalMode("Parental Mode", HAMqttDevice::SWITCH);
-HAMqttDevice mqttAmplifierEnabledSwitch("Amplifier", HAMqttDevice::SWITCH);
-HAMqttDevice mqttVolumeMuteButton("Mute Button", HAMqttDevice::BUTTON);
-HAMqttDevice mqttVolumeUpButton("Volume Up Button", HAMqttDevice::BUTTON);
-HAMqttDevice mqttVolumeDownButton("Volume Down Button", HAMqttDevice::BUTTON);
+HAMqttDevice mqttPowerButton("Arcade Cabinet Power Button", HAMqttDevice::BUTTON);
+HAMqttDevice mqttPowerState("Arcade Cabinet Power State", HAMqttDevice::BINARY_SENSOR);
+HAMqttDevice mqttParentalMode("Arcade Cabinet Parental Mode", HAMqttDevice::SWITCH);
+HAMqttDevice mqttAmplifierEnabledSwitch("Arcade Cabinet Amplifier", HAMqttDevice::SWITCH);
+HAMqttDevice mqttVolumeMuteButton("Arcade Cabinet Mute Button", HAMqttDevice::BUTTON);
+HAMqttDevice mqttVolumeUpButton("Arcade Cabinet Volume Up Button", HAMqttDevice::BUTTON);
+HAMqttDevice mqttVolumeDownButton("Arcade Cabinet Volume Down Button", HAMqttDevice::BUTTON);
 
 bool parentalMode = false;
 bool cabinetPowerState = LOW;
