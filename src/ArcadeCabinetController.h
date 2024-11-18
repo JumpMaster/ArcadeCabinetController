@@ -52,15 +52,25 @@ bool startupComplete = false;
 
 USBHIDKeyboard Keyboard;
 
-const char* deviceConfig = "{\"identifiers\":\"be6beb17-0012-4a70-bc76-a484d34de5cb\",\"name\":\"ArcadeCabinet\",\"sw_version\":\"2024.10.0\",\"model\":\"ArcadeCabinet\",\"manufacturer\":\"JumpMaster\"}";
+const char device_name[] = "Arcade Cabinet Controller";
+const char device_id[] = "1488a590-049a-4bec-9716-5d0374d64684";
+const char device_manufacturer[] = "Kevin Electronics";
+const char device_hardware[] = "Feather ESP32-S3";
+const char device_version[] = "2024.11.1";
 
-HAMqttDevice mqttPowerButton("Arcade Cabinet Power Button", HAMqttDevice::BUTTON);
-HAMqttDevice mqttPowerState("Arcade Cabinet Power State", HAMqttDevice::BINARY_SENSOR);
-HAMqttDevice mqttParentalMode("Arcade Cabinet Parental Mode", HAMqttDevice::SWITCH);
-HAMqttDevice mqttAmplifierEnabledSwitch("Arcade Cabinet Amplifier", HAMqttDevice::SWITCH);
-HAMqttDevice mqttVolumeMuteButton("Arcade Cabinet Mute Button", HAMqttDevice::BUTTON);
-HAMqttDevice mqttVolumeUpButton("Arcade Cabinet Volume Up Button", HAMqttDevice::BUTTON);
-HAMqttDevice mqttVolumeDownButton("Arcade Cabinet Volume Down Button", HAMqttDevice::BUTTON);
+HAMqttParent parentMQTTDevice(device_name,
+                              device_id,
+                              device_manufacturer,
+                              device_hardware,
+                              device_version);
+
+HAMqttDevice mqttPowerButton("Power Button", "8b9ba715-5f64-43f9-99f9-3ec8ba58ef9b", HAMqttDevice::BUTTON);
+HAMqttDevice mqttPowerState("Power State", "bd1f76a1-ddbc-4e7a-910b-1b13906dda3c", HAMqttDevice::BINARY_SENSOR);
+HAMqttDevice mqttParentalMode("Parental Mode", "38f6a6c0-3e8a-4408-b715-d1509239441f", HAMqttDevice::SWITCH);
+HAMqttDevice mqttAmplifierEnabledSwitch("Amplifier Power", "919d534c-ec88-4f01-8804-04b235636bed", HAMqttDevice::SWITCH);
+HAMqttDevice mqttVolumeMuteButton("Mute Button", "bd90446a-de23-496a-9a3a-0ca6abc0083c", HAMqttDevice::BUTTON);
+HAMqttDevice mqttVolumeUpButton("Volume Up Button", "27e5ef9f-4db3-4eca-a1fd-ee5f6b6c03df", HAMqttDevice::BUTTON);
+HAMqttDevice mqttVolumeDownButton("Volume Down Button", "53cf17e7-1d86-4680-b4c5-54804eb641e8", HAMqttDevice::BUTTON);
 
 bool parentalMode = false;
 bool cabinetPowerState = LOW;

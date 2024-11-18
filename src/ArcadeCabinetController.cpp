@@ -142,13 +142,13 @@ void setupMarquee()
 
 void setupLocalMQTT()
 {
-    mqttPowerButton.addConfigVar("device", deviceConfig);
-    mqttPowerState.addConfigVar("device", deviceConfig);
-    mqttParentalMode.addConfigVar("device", deviceConfig);
-    mqttAmplifierEnabledSwitch.addConfigVar("device", deviceConfig);
-    mqttVolumeMuteButton.addConfigVar("device", deviceConfig);
-    mqttVolumeUpButton.addConfigVar("device", deviceConfig);
-    mqttVolumeDownButton.addConfigVar("device", deviceConfig);
+    parentMQTTDevice.addHAMqttDevice(&mqttPowerButton);
+    parentMQTTDevice.addHAMqttDevice(&mqttPowerState);
+    parentMQTTDevice.addHAMqttDevice(&mqttParentalMode);
+    parentMQTTDevice.addHAMqttDevice(&mqttAmplifierEnabledSwitch);
+    parentMQTTDevice.addHAMqttDevice(&mqttVolumeMuteButton);
+    parentMQTTDevice.addHAMqttDevice(&mqttVolumeUpButton);
+    parentMQTTDevice.addHAMqttDevice(&mqttVolumeDownButton);
 
     mqttClient.setCallback(mqttCallback);
 
@@ -324,7 +324,7 @@ void manageMarqueePixels()
             ledMarqueeRequestedColor[1] != ledMarqueeColor[1] ||
             ledMarqueeRequestedColor[2] != ledMarqueeColor[2]);
         {
-            for (uint8_t i = 0; i <= 3; i++)
+            for (uint8_t i = 0; i < 3; i++)
             {
                 if (ledMarqueeRequestedColor[i] == ledMarqueeColor[i])
                     continue;
@@ -352,13 +352,7 @@ void manageLocalMQTT()
     {
         mqttReconnected = false;
 
-        mqttClient.publish(mqttPowerButton.getConfigTopic().c_str(), mqttPowerButton.getConfigPayload().c_str(), true);
-        mqttClient.publish(mqttPowerState.getConfigTopic().c_str(), mqttPowerState.getConfigPayload().c_str(), true);
-        mqttClient.publish(mqttParentalMode.getConfigTopic().c_str(), mqttParentalMode.getConfigPayload().c_str(), true);
-        mqttClient.publish(mqttVolumeMuteButton.getConfigTopic().c_str(), mqttVolumeMuteButton.getConfigPayload().c_str(), true);
-        mqttClient.publish(mqttVolumeUpButton.getConfigTopic().c_str(), mqttVolumeUpButton.getConfigPayload().c_str(), true);
-        mqttClient.publish(mqttVolumeDownButton.getConfigTopic().c_str(), mqttVolumeDownButton.getConfigPayload().c_str(), true);
-        mqttClient.publish(mqttAmplifierEnabledSwitch.getConfigTopic().c_str(), mqttAmplifierEnabledSwitch.getConfigPayload().c_str(), true);
+        mqttClient.publish(parentMQTTDevice.getConfigTopic().c_str(), parentMQTTDevice.getConfigPayload().c_str(), true);
 
         mqttClient.publish(mqttPowerState.getStateTopic().c_str(), cabinetPowerState ? "ON" : "OFF", true);
         mqttClient.publish(mqttParentalMode.getStateTopic().c_str(), parentalMode ? "ON" : "OFF", true);
