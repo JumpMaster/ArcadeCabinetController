@@ -1,6 +1,7 @@
 #ifndef ARCADE_CABINET_CONTROLLER_H
 #define ARCADE_CABINET_CONTROLLER_H
 
+#include "StandardFeatures.h"
 #include "USB.h"
 #include "USBHIDKeyboard.h"
 #include "Button2.h"
@@ -52,11 +53,11 @@ bool startupComplete = false;
 
 USBHIDKeyboard Keyboard;
 
-const char device_name[] = "Arcade Cabinet Controller";
-const char device_id[] = "1488a590-049a-4bec-9716-5d0374d64684";
-const char device_manufacturer[] = "Kevin Electronics";
-const char device_hardware[] = "Feather ESP32-S3";
-const char device_version[] = "2024.11.1";
+const char *device_name = "Arcade Cabinet Controller";
+const char *device_id = "1488a590-049a-4bec-9716-5d0374d64684";
+const char *device_manufacturer = "Kevin Electronics";
+const char *device_hardware = "Feather ESP32-S3";
+const char *device_version = appVersion;
 
 HAMqttParent parentMQTTDevice(device_name,
                               device_id,

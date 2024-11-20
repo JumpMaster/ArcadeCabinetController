@@ -1,7 +1,6 @@
 #define DIAGNOSTIC_PIXEL_PIN  14
 #define DIAGNOSTIC_LED_PIN  13
 
-#include "StandardFeatures.h"
 #include "ArcadeCabinetController.h"
 
 void player1ButtonHandler(Button2& btn);
