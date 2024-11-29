@@ -1,13 +1,19 @@
 #ifndef ARCADE_CABINET_CONTROLLER_H
 #define ARCADE_CABINET_CONTROLLER_H
 
+#define DIAGNOSTIC_PIXEL
+#define DIAGNOSTIC_LED
+
 #include "StandardFeatures.h"
+#include "secrets.h"
 #include "USB.h"
 #include "USBHIDKeyboard.h"
 #include "Button2.h"
 #include "HAMqttDevice.h"
 #include <Adafruit_NeoPXL8.h>
 #include <Preferences.h>
+
+StandardFeatures standardFeatures;
 
 Preferences preferences;
 const char *KEY_POWER_STATE = "power-state";
@@ -72,6 +78,7 @@ HAMqttDevice mqttAmplifierEnabledSwitch("Amplifier Power", "919d534c-ec88-4f01-8
 HAMqttDevice mqttVolumeMuteButton("Mute Button", "bd90446a-de23-496a-9a3a-0ca6abc0083c", HAMqttDevice::BUTTON);
 HAMqttDevice mqttVolumeUpButton("Volume Up Button", "27e5ef9f-4db3-4eca-a1fd-ee5f6b6c03df", HAMqttDevice::BUTTON);
 HAMqttDevice mqttVolumeDownButton("Volume Down Button", "53cf17e7-1d86-4680-b4c5-54804eb641e8", HAMqttDevice::BUTTON);
+HAMqttDevice mqttRebootButton("Reboot Controller", "139884f5-e005-40ea-b051-b5151587e7e8", HAMqttDevice::BUTTON);
 
 bool parentalMode = false;
 bool cabinetPowerState = LOW;

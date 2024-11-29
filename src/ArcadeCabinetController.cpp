@@ -1,6 +1,3 @@
-#define DIAGNOSTIC_PIXEL_PIN  14
-#define DIAGNOSTIC_LED_PIN  13
-
 #include "ArcadeCabinetController.h"
 
 void player1ButtonHandler(Button2& btn);
@@ -50,7 +47,7 @@ void setParentalMode(bool state)
 {
     parentalMode = state;
     preferences.putBool(KEY_PARENTAL_MODE, parentalMode);
-    mqttClient.publish(mqttParentalMode.getStateTopic().c_str(), parentalMode ? "ON" : "OFF", true);
+    standardFeatures.mqttPublish(mqttParentalMode.getStateTopic().c_str(), parentalMode ? "ON" : "OFF", true);
     Log.printf("Parental mode turned %s\n", parentalMode ? "on" : "off");
 }
 
@@ -62,9 +59,9 @@ void setAmplifierState(bool state)
 
     Log.printf("Amp %s\n", amplifierEnabled ? "on" : "off");
 
-    if (mqttClient.connected())
+    if (standardFeatures.isMQTTConnected())
     {
-        mqttClient.publish(mqttAmplifierEnabledSwitch.getStateTopic().c_str(), amplifierEnabled ? "ON" : "OFF", true);
+        standardFeatures.mqttPublish(mqttAmplifierEnabledSwitch.getStateTopic().c_str(), amplifierEnabled ? "ON" : "OFF", true);
     }
 
     switchAmplifier(cabinetPowerState && amplifierEnabled);
@@ -83,22 +80,27 @@ void mqttCallback(char* topic, byte* payload, unsigned int length)
 
     //Log.printf("mqttCallback - %s : %s\n", topic, data);
 
-    if (strcmp(topic, mqttPowerButton.getCommandTopic().c_str()) == 0)
+
+    if (strcmp(mqttRebootButton.getCommandTopic().c_str(), topic) == 0) // Restart Topic
+    {
+        ESP.restart();
+    }
+    else if (strcmp(topic, mqttPowerButton.getCommandTopic().c_str()) == 0)
     {
         if (strcmp(data, "PRESS") == 0)
         {
             Log.println("Virtual power button pressed");
-            mqttClient.publish("log/mqttCallback", "Virtual power button pressed");
+            standardFeatures.mqttPublish("log/mqttCallback", "Virtual power button pressed");
             togglePowerSwitch();
             if (cabinetPowerState == LOW)
             {   // Power on
                 Log.println("Cabinet power on initiated");
-                mqttClient.publish("log/mqttCallback", "Cabinet power on initiated");
+                standardFeatures.mqttPublish("log/mqttCallback", "Cabinet power on initiated");
             }
             else
             {   // Shutdown
                 Log.println("Cabinet shutdown initiated");
-                mqttClient.publish("log/mqttCallback", "Cabinet shutdown initiated");
+                standardFeatures.mqttPublish("log/mqttCallback", "Cabinet shutdown initiated");
             }
         }
     }
@@ -139,6 +141,25 @@ void setupMarquee()
     marqueePixels.show(); 
 }
 
+
+void onMQTTConnect()
+{
+    standardFeatures.mqttPublish(parentMQTTDevice.getConfigTopic().c_str(), parentMQTTDevice.getConfigPayload().c_str(), true);
+
+    standardFeatures.mqttSubscribe(mqttRebootButton.getCommandTopic().c_str());
+
+    standardFeatures.mqttPublish(mqttPowerState.getStateTopic().c_str(), cabinetPowerState ? "ON" : "OFF", true);
+    standardFeatures.mqttPublish(mqttParentalMode.getStateTopic().c_str(), parentalMode ? "ON" : "OFF", true);
+    standardFeatures.mqttPublish(mqttAmplifierEnabledSwitch.getStateTopic().c_str(), amplifierEnabled ? "ON" : "OFF", true);
+
+    standardFeatures.mqttSubscribe(mqttPowerButton.getCommandTopic().c_str());
+    standardFeatures.mqttSubscribe(mqttParentalMode.getCommandTopic().c_str());
+    standardFeatures.mqttSubscribe(mqttVolumeMuteButton.getCommandTopic().c_str());
+    standardFeatures.mqttSubscribe(mqttVolumeUpButton.getCommandTopic().c_str());
+    standardFeatures.mqttSubscribe(mqttVolumeDownButton.getCommandTopic().c_str());
+    standardFeatures.mqttSubscribe(mqttAmplifierEnabledSwitch.getCommandTopic().c_str());
+}
+
 void setupLocalMQTT()
 {
     parentMQTTDevice.addHAMqttDevice(&mqttPowerButton);
@@ -148,10 +169,10 @@ void setupLocalMQTT()
     parentMQTTDevice.addHAMqttDevice(&mqttVolumeMuteButton);
     parentMQTTDevice.addHAMqttDevice(&mqttVolumeUpButton);
     parentMQTTDevice.addHAMqttDevice(&mqttVolumeDownButton);
+    parentMQTTDevice.addHAMqttDevice(&mqttRebootButton);
 
-    mqttClient.setCallback(mqttCallback);
-
-    mqttReconnected = true;
+    standardFeatures.setMqttCallback(mqttCallback);
+    standardFeatures.setMqttOnConnectCallback(onMQTTConnect);
 }
 
 void loadSavedPreferences()
@@ -192,9 +213,15 @@ void loadSavedPreferences()
 
 void setup()
 {
+    standardFeatures.enableLogging(deviceName, syslogServer, syslogPort);
+    standardFeatures.enableDiagnosticPixel(14);
+    standardFeatures.enableDiagnosticLed(13);
+    standardFeatures.enableWiFi(wifiSSID, wifiPassword, deviceName);
+    standardFeatures.enableOTA(deviceName, otaPassword);
+    standardFeatures.enableSafeMode(appVersion);
+    standardFeatures.enableMQTT(mqttServer, mqttUsername, mqttPassword, deviceName);
+
     setupLocalMQTT();
-    
-    StandardSetup();
 
     pinMode(PC_POWER_LED_SENSE_PIN, INPUT_PULLUP);
 
@@ -241,19 +268,26 @@ void managePowerStateChanges()
                 setLightMode(LIGHT_MODE_RAINBOW);
             }
                 
-            diagnosticPixelColor2 = NEOPIXEL_MAGENTA;
+            standardFeatures.setDiagnosticPixelColor(StandardFeatures::NEOPIXEL_MAGENTA);
             player1Button.setLongClickTime(longClickTimeReset);
         }
         else // OFF
         {
             setLightMode(LIGHT_MODE_OFF);
-            diagnosticPixelColor2 = NEOPIXEL_BLACK;
+            standardFeatures.setDiagnosticPixelColor(StandardFeatures::NEOPIXEL_BLACK);
             player1Button.setLongClickTime(longClickTimePowerOn);
         }
 
         switchAmplifier(amplifierEnabled);
         preferences.putBool(KEY_POWER_STATE, cabinetPowerState);
         Log.printf("Cabinet powering %s\n", cabinetPowerState ? "on" : "off");
+    }
+
+    if (reportedPowerState != cabinetPowerState && standardFeatures.isMQTTConnected())
+    {
+        reportedPowerState = cabinetPowerState;
+
+        standardFeatures.mqttPublish(mqttPowerState.getStateTopic().c_str(), cabinetPowerState ? "ON" : "OFF", true);
     }
 }
 
@@ -313,8 +347,8 @@ void manageMarqueePixels()
 
         for (uint16_t i = 0; i < whiteBuffer; i++)
         {
-            marqueePixels.setPixelColor(i, NEOPIXEL_WHITE);
-            marqueePixels.setPixelColor(NUMPIXELS-1-i, NEOPIXEL_WHITE);
+            marqueePixels.setPixelColor(i, StandardFeatures::NEOPIXEL_WHITE);
+            marqueePixels.setPixelColor(NUMPIXELS-1-i, StandardFeatures::NEOPIXEL_WHITE);
         }
     }
     else if (lightMode == LIGHT_MODE_SOLID)
@@ -343,35 +377,6 @@ void manageMarqueePixels()
 
     marqueePixels.show();
     nextLedStripUpdate = millis() + stripUpdateInterval;
-}
-
-void manageLocalMQTT()
-{
-    if (mqttClient.connected() && mqttReconnected)
-    {
-        mqttReconnected = false;
-
-        mqttClient.publish(parentMQTTDevice.getConfigTopic().c_str(), parentMQTTDevice.getConfigPayload().c_str(), true);
-
-        mqttClient.publish(mqttPowerState.getStateTopic().c_str(), cabinetPowerState ? "ON" : "OFF", true);
-        mqttClient.publish(mqttParentalMode.getStateTopic().c_str(), parentalMode ? "ON" : "OFF", true);
-        mqttClient.publish(mqttAmplifierEnabledSwitch.getStateTopic().c_str(), amplifierEnabled ? "ON" : "OFF", true);
-
-        mqttClient.subscribe(mqttPowerButton.getCommandTopic().c_str());
-        mqttClient.subscribe(mqttParentalMode.getCommandTopic().c_str());
-        mqttClient.subscribe(mqttVolumeMuteButton.getCommandTopic().c_str());
-        mqttClient.subscribe(mqttVolumeUpButton.getCommandTopic().c_str());
-        mqttClient.subscribe(mqttVolumeDownButton.getCommandTopic().c_str());
-        mqttClient.subscribe(mqttAmplifierEnabledSwitch.getCommandTopic().c_str());
-    }
-
-    if (reportedPowerState != cabinetPowerState)
-    {
-        reportedPowerState = cabinetPowerState;
-
-        if (mqttClient.connected())
-            mqttClient.publish(mqttPowerState.getStateTopic().c_str(), cabinetPowerState ? "ON" : "OFF", true);
-    }
 }
 
 void manageSerialReceive()
@@ -440,9 +445,10 @@ void manageSerialReceive()
 
 void loop()
 {
-    StandardLoop();
+    standardFeatures.loop();
 
-    manageLocalMQTT();
+    if (standardFeatures.isOTARunning())
+        return;
 
     player1Button.loop();
 
