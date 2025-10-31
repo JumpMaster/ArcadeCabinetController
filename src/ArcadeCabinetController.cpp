@@ -4,6 +4,12 @@ void player1ButtonHandler(Button2& btn);
 void switchAmplifier(bool state);
 void monitorPowerState();
 
+void forcePowerOff()
+{
+    digitalWrite(PC_POWER_SWITCH_PIN, HIGH); // Power Switch
+    forcePowerOffStopTime = millis() + 5000;
+}
+
 void togglePowerSwitch()
 {
     digitalWrite(PC_POWER_SWITCH_PIN, HIGH); // Power Switch
@@ -104,6 +110,11 @@ void mqttCallback(char* topic, byte* payload, unsigned int length)
             }
         }
     }
+    else if (strcmp(topic, mqttForcePowerOff.getCommandTopic().c_str()) == 0)
+    {
+        Log.println("Forcing power off");
+        forcePowerOff();
+    }
     else if (strcmp(mqttParentalMode.getCommandTopic().c_str(), topic) == 0)
     {
         bool mode = strcmp(data, "ON") == 0;
@@ -153,6 +164,7 @@ void onMQTTConnect()
     standardFeatures.mqttPublish(mqttAmplifierEnabledSwitch.getStateTopic().c_str(), amplifierEnabled ? "ON" : "OFF", true);
 
     standardFeatures.mqttSubscribe(mqttPowerButton.getCommandTopic().c_str());
+    standardFeatures.mqttSubscribe(mqttForcePowerOff.getCommandTopic().c_str());
     standardFeatures.mqttSubscribe(mqttParentalMode.getCommandTopic().c_str());
     standardFeatures.mqttSubscribe(mqttVolumeMuteButton.getCommandTopic().c_str());
     standardFeatures.mqttSubscribe(mqttVolumeUpButton.getCommandTopic().c_str());
@@ -163,6 +175,7 @@ void onMQTTConnect()
 void setupLocalMQTT()
 {
     parentMQTTDevice.addHAMqttDevice(&mqttPowerButton);
+    parentMQTTDevice.addHAMqttDevice(&mqttForcePowerOff);
     parentMQTTDevice.addHAMqttDevice(&mqttPowerState);
     parentMQTTDevice.addHAMqttDevice(&mqttParentalMode);
     parentMQTTDevice.addHAMqttDevice(&mqttAmplifierEnabledSwitch);
@@ -449,6 +462,12 @@ void loop()
 
     if (standardFeatures.isOTARunning())
         return;
+
+    if (forcePowerOffStopTime > 0 && millis() > forcePowerOffStopTime)
+    {
+        forcePowerOffStopTime = 0;
+        digitalWrite(PC_POWER_SWITCH_PIN, LOW);  // Power Switch
+    }
 
     player1Button.loop();
 

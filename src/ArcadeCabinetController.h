@@ -10,7 +10,6 @@
 #include "USBHIDKeyboard.h"
 #include "Button2.h"
 #include "HAMqttDevice.h"
-#include <Adafruit_NeoPXL8.h>
 #include <Preferences.h>
 
 StandardFeatures standardFeatures;
@@ -40,8 +39,8 @@ typedef enum
 } LightMode;
 
 const uint8_t NUMPIXELS = 34;
-int8_t ledPins[8] = { LED_STRIP_PIN, -1, -1, -1, -1, -1, -1, -1 };
-Adafruit_NeoPXL8 marqueePixels(NUMPIXELS, ledPins, NEO_RGB);
+//int8_t ledPins[8] = { LED_STRIP_PIN, -1, -1, -1, -1, -1, -1, -1 };
+Adafruit_NeoPixel marqueePixels(NUMPIXELS, LED_STRIP_PIN, NEO_RGB + NEO_KHZ800);
 
 LightMode lightMode = LIGHT_MODE_OFF;
 uint32_t nextLedStripUpdate = 0;
@@ -53,6 +52,7 @@ uint8_t ledMarqueeRequestedColor[3] = { 255, 255, 255 };
 Button2 player1Button;
 uint32_t longClickTimePowerOn = 300UL;
 uint32_t longClickTimeReset = 10000UL;
+uint32_t forcePowerOffStopTime = 0;
 
 bool amplifierEnabled = true;
 bool startupComplete = false;
@@ -72,6 +72,7 @@ HAMqttParent parentMQTTDevice(device_name,
                               device_version);
 
 HAMqttDevice mqttPowerButton("Power Button", "8b9ba715-5f64-43f9-99f9-3ec8ba58ef9b", HAMqttDevice::BUTTON);
+HAMqttDevice mqttForcePowerOff("Force Power Off", "3445459a-21be-484c-8318-a1eebd452ed4", HAMqttDevice::BUTTON);
 HAMqttDevice mqttPowerState("Power State", "bd1f76a1-ddbc-4e7a-910b-1b13906dda3c", HAMqttDevice::BINARY_SENSOR);
 HAMqttDevice mqttParentalMode("Parental Mode", "38f6a6c0-3e8a-4408-b715-d1509239441f", HAMqttDevice::SWITCH);
 HAMqttDevice mqttAmplifierEnabledSwitch("Amplifier Power", "919d534c-ec88-4f01-8804-04b235636bed", HAMqttDevice::SWITCH);
